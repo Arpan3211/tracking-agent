@@ -17,6 +17,7 @@ public sealed class AgentContext : ApplicationContext
     private static readonly TimeSpan ScreenshotInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan LocationPollInterval = TimeSpan.FromMinutes(60);
     private static readonly TimeSpan PrinterPollInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan SyncTickInterval = TimeSpan.FromSeconds(5);
 
     private readonly ActivityLogger _logger = new();
     private readonly Form _hiddenForm;
@@ -29,6 +30,7 @@ public sealed class AgentContext : ApplicationContext
     private readonly DeviceActivityMonitor _deviceMonitor;
     private readonly IpLocationMonitor _locationMonitor;
     private readonly PrinterActivityMonitor _printerMonitor;
+    private readonly SyncLoop? _syncLoop;
 
     private readonly System.Windows.Forms.Timer _idleTimer;
     private readonly System.Windows.Forms.Timer _windowTimer;
@@ -36,6 +38,7 @@ public sealed class AgentContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _screenshotTimer;
     private readonly System.Windows.Forms.Timer _locationTimer;
     private readonly System.Windows.Forms.Timer _printerTimer;
+    private readonly System.Windows.Forms.Timer? _syncTimer;
 
     public AgentContext()
     {
@@ -63,6 +66,7 @@ public sealed class AgentContext : ApplicationContext
         _deviceMonitor = new DeviceActivityMonitor(_logger);
         _locationMonitor = new IpLocationMonitor(_logger);
         _printerMonitor = new PrinterActivityMonitor(_logger);
+        _syncLoop = SyncLoop.CreateIfConfigured(_logger);
 
         _deviceMonitor.Start();
         _networkMonitor.Start();
@@ -73,6 +77,14 @@ public sealed class AgentContext : ApplicationContext
         _screenshotTimer = StartTimer(ScreenshotInterval, (_, _) => _screenshotCapture.CaptureNow());
         _locationTimer = StartTimer(LocationPollInterval, async (_, _) => await _locationMonitor.PollAsync());
         _printerTimer = StartTimer(PrinterPollInterval, (_, _) => _printerMonitor.Poll());
+
+        // Only runs if EMPLOYEEAGENT_BACKEND_URL is set - see SyncLoop.CreateIfConfigured.
+        // Ticks frequently (5s) but only actually syncs when its own
+        // 30s-or-50-events threshold is due; see SyncLoop.TickAsync.
+        if (_syncLoop is not null)
+        {
+            _syncTimer = StartTimer(SyncTickInterval, async (_, _) => await _syncLoop.TickAsync());
+        }
 
         // Fire one location lookup immediately at startup too, don't wait a full hour
         _ = _locationMonitor.PollAsync();
@@ -137,10 +149,12 @@ public sealed class AgentContext : ApplicationContext
         _screenshotTimer.Stop();
         _locationTimer.Stop();
         _printerTimer.Stop();
+        _syncTimer?.Stop();
 
         _fileMonitor.Dispose();
         _deviceMonitor.Dispose();
         _networkMonitor.Dispose();
+        _syncLoop?.Dispose();
 
         _logger.Log("agent_stopped");
         _hiddenForm.Dispose();

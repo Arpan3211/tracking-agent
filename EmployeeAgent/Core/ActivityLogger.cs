@@ -3,18 +3,29 @@ using System.Text.Json;
 namespace EmployeeAgent.Core;
 
 /// <summary>
-/// Writes activity events to a local JSON-lines log file.
-/// This stands in for the "local buffer + upload to backend" step from the
-/// full architecture - for this MVP we just prove the events are captured
-/// correctly. Swap Log()'s body for an HTTP POST (or SQLite insert) later
-/// without touching any of the callers.
+/// Writes activity events to a local JSON-lines log file. This is the
+/// write-ahead buffer: SyncLoop (see SyncLoop.cs) reads from this same file
+/// and ships unsent lines to the backend, but this class never talks to the
+/// network itself and the file is never truncated - monitors keep logging
+/// locally regardless of whether the backend is reachable.
 /// </summary>
 public sealed class ActivityLogger
 {
     private readonly string _logFilePath;
     private readonly object _lock = new();
+    private long _totalLinesWritten;
 
     public string LogFilePath => _logFilePath;
+
+    /// Total lines ever written to the log file, including from previous
+    /// process runs (counted once at startup, then tracked incrementally) -
+    /// this is the same numbering space SyncLoop's "last synced line"
+    /// pointer uses, so it has to reflect the file's real history, not just
+    /// what this process instance has written since it started.
+    public long TotalLinesWritten
+    {
+        get { lock (_lock) return _totalLinesWritten; }
+    }
 
     public ActivityLogger()
     {
@@ -40,6 +51,8 @@ public sealed class ActivityLogger
         // shared file (multiple processes appending to one file isn't safe).
         var fileName = $"activity_{Environment.MachineName}.log";
         _logFilePath = Path.Combine(folder, fileName);
+
+        _totalLinesWritten = File.Exists(_logFilePath) ? File.ReadLines(_logFilePath).Count() : 0;
     }
 
     public void Log(string eventType, string? details = null)
@@ -50,9 +63,22 @@ public sealed class ActivityLogger
         lock (_lock)
         {
             File.AppendAllText(_logFilePath, line + Environment.NewLine);
+            _totalLinesWritten++;
         }
 
         // Also print to console when run via `dotnet run`, useful while testing
         Console.WriteLine($"[{evt.TimestampUtc:O}] {eventType} {details}");
+    }
+
+    /// Reads every line from startLine (0-indexed) to the current end of
+    /// file. Takes the same lock Log() writes under, so a caller never sees
+    /// a torn read mid-append.
+    public IReadOnlyList<string> ReadLinesFrom(long startLine)
+    {
+        lock (_lock)
+        {
+            if (!File.Exists(_logFilePath)) return Array.Empty<string>();
+            return File.ReadLines(_logFilePath).Skip((int)startLine).ToList();
+        }
     }
 }

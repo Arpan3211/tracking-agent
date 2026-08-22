@@ -1,14 +1,99 @@
-# Employee Agent — Full Feature Build (No Backend Yet)
+# Employee Agent
 
-This build implements every feature from the original plan, storing
-everything to a **local activity log file** (no backend/database exists
-yet — that's the next stage). It includes OS-enforced anti-tamper via a real
-Windows Service, full-URL browser tracking via a native-messaging browser
-extension, per-process network attribution via ETW, real file-open tracking
-via ETW, printer job tracking via WMI, multi-monitor screenshots, and a
-script that turns the raw log into a readable Markdown report.
+A three-part employee monitoring stack: a Windows agent that captures activity
+locally and syncs it to a backend, a FastAPI + PostgreSQL backend that
+ingests and aggregates that activity, and a React dashboard for
+supervisors/HR/Admin to view it.
 
-## What's implemented
+```
+EmployeeAgent/            per-user-session Windows agent (WinForms, no visible window)
+EmployeeAgent.Service/    Windows Service - OS-enforced anti-tamper supervisor
+EmployeeAgent.NativeHost/ Chrome/Edge native messaging host - full URL tracking
+browser-extension/        Manifest V3 extension - reports tab URLs to the native host
+backend/                  FastAPI + PostgreSQL API (ingestion, dashboard, alerts)
+dashboard/                React + TypeScript dashboard (Vite)
+tools/                    generate_report.py - standalone log-to-Markdown report
+install/                  PowerShell scripts (Windows Service + native host registration)
+```
+
+The agent still works entirely standalone (writing to a local log file and,
+optionally, generating a Markdown report via `tools/generate_report.py`) if
+you never stand up the backend — see "Running without a backend" below. The
+sections below assume you want the full stack.
+
+## Running the whole stack locally
+
+### 1. Backend (FastAPI + PostgreSQL, in Docker)
+
+```bash
+cp backend/.env.example backend/.env
+# edit backend/.env - set JWT_SECRET_KEY and SEED_ADMIN_PASSWORD at minimum.
+# For local http:// (not https) dashboard dev, also set COOKIE_SECURE=false.
+
+docker compose up -d db
+docker compose build api
+docker compose up -d api
+
+docker compose exec api alembic upgrade head
+docker compose exec api python -m scripts.seed_admin
+```
+
+Verify: `curl http://localhost:8000/health` → `{"status":"ok"}`. Full detail
+(migrations, tests, architecture notes) in [backend/README.md](backend/README.md).
+
+### 2. Dashboard (React + Vite)
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` and log in with the admin credentials from
+`backend/.env` (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`). The Vite dev
+server proxies `/api` to `http://localhost:8000` (see `dashboard/vite.config.ts`)
+so the browser sees the dashboard and API as one origin — this matters
+because auth uses httpOnly cookies with a CSRF double-submit token, not a
+bearer token you'd attach manually.
+
+For a production build: `npm run build` (outputs `dashboard/dist/`, a static
+bundle you can serve from any static host or reverse proxy alongside the API
+— there's no dashboard-specific Docker service defined yet, matching the
+original scope of the Compose file being API + DB only).
+
+### 3. Point the agent at the backend
+
+The agent works exactly as before (local-log-only) unless you set one
+environment variable. On the Windows machine running `EmployeeAgent.exe`:
+
+```powershell
+setx EMPLOYEEAGENT_BACKEND_URL "http://<your-backend-host>:8000"
+```
+
+On the next agent restart, `SyncLoop` (see `EmployeeAgent/Core/SyncLoop.cs`)
+starts running: it enrolls the device with the backend on first sync
+(`POST /api/v1/devices/enroll`), caches the returned API key locally, and
+from then on batches unsent lines from the local activity log to
+`POST /api/v1/ingest/events` every 30 seconds or every 50 events, whichever
+comes first. The local log file is never deleted or truncated — it's the
+offline-resilience buffer, so a network outage just means the backend falls
+behind, not that events are lost. A "last synced line" pointer file
+(`sync_state_<machine>.json`, next to the log) makes this resume correctly
+across agent restarts instead of resending or dropping lines.
+
+If you're testing from a non-Windows machine (like this dev environment),
+you can exercise ingestion manually with `curl` — see
+[backend/README.md](backend/README.md#pointing-a-test-agent-at-the-local-backend).
+
+## Running without a backend
+
+The agent, its Windows Service supervisor, the browser extension, and
+`tools/generate_report.py` all work exactly as documented below with zero
+backend involvement — this was the whole point of keeping the local
+JSON-lines log as the write-ahead buffer rather than making the backend a
+hard dependency.
+
+## What's implemented (agent)
 
 | Feature | Where | Notes |
 |---|---|---|
@@ -25,32 +110,29 @@ script that turns the raw log into a readable Markdown report.
 | Printer usage | `Core/PrinterActivityMonitor.cs` | Polls WMI `Win32_PrintJob`; logs job submitted/completed with document, owner, printer, page count |
 | IP-based rough location | `Core/IpLocationMonitor.cs` | City-level only, needs internet access |
 | Anti-tamper | `EmployeeAgent.Service/` | A real Windows Service (LocalSystem, `sc failure` auto-restart) that supervises a per-user-session `EmployeeAgent.exe`, relaunching it into any interactive session where it's missing |
-| Report generation | `tools/generate_report.py` | Turns `activity_<machine>.log` into `report.md` |
+| Backend sync | `Core/SyncLoop.cs` | Opt-in (`EMPLOYEEAGENT_BACKEND_URL`); local log stays the write-ahead buffer regardless |
+| Report generation | `tools/generate_report.py` | Turns `activity_<machine>.log` into `report.md`, entirely independent of the backend |
 
 ## Requirements
 
-- Windows 10/11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- Python 3.10+ (only for the report script — nothing else needs it)
-- **Administrator/elevated rights** for the agent process — starting the ETW
-  kernel trace sessions used for per-process network usage and file-open
-  tracking is an admin-only operation. Without elevation, those two features
-  log a single failure event and are simply skipped (everything else in the
-  agent still works normally).
-- Chrome or Edge (Chromium-based) if you want full-URL website tracking —
-  Firefox isn't supported by this build.
+- **Agent**: Windows 10/11, [.NET 8 SDK](https://dotnet.microsoft.com/download).
+  Administrator/elevated rights for per-process network usage and file-open
+  tracking (ETW) — without elevation those two features log a single
+  failure event and are skipped, everything else works normally. Chrome or
+  Edge if you want full-URL website tracking.
+- **Backend**: Docker + Docker Compose (everything else runs inside
+  containers — you don't need Python or PostgreSQL installed locally).
+- **Dashboard**: Node.js 20+.
+- **Report script**: Python 3.10+ — nothing else needs it, works independent
+  of the backend or Docker.
 
-## Setup
+## Setup (agent only)
 
 ```powershell
 cd EmployeeAgent
 dotnet restore
 dotnet run
 ```
-
-Run an elevated (Administrator) PowerShell/terminal if you want per-process
-network usage and file-open tracking to work — otherwise those two features
-silently no-op (see Requirements above).
 
 `dotnet restore` pulls in `System.Management` (USB/printer WMI) and
 `Microsoft.Diagnostics.Tracing.TraceEvent` (ETW-based network/file-open
@@ -66,7 +148,8 @@ C:\ProgramData\EmployeeAgent\Screenshots\                  <- periodic screensho
 ## Generating the visual report
 
 Once the agent has been running a while (or you've tested a few features
-manually), generate the report:
+manually), generate the report — this works whether or not the backend is
+in the picture, straight from the local log file:
 
 ```powershell
 cd tools
@@ -116,7 +199,7 @@ Group Policy instead of loading it unpacked per machine.
 
 ## Running the anti-tamper Windows Service
 
-Anti-tamper is now a real Windows Service (`EmployeeAgent.Service`), not a
+Anti-tamper is a real Windows Service (`EmployeeAgent.Service`), not a
 separate always-visible watchdog `.exe`. It runs as `LocalSystem`, is
 configured with an OS-enforced `sc failure` restart policy, and its only job
 is making sure an `EmployeeAgent.exe` is running in every active interactive
@@ -180,14 +263,30 @@ tenant-specific and out of scope for this repo to ship as code.
 - **Anti-tamper** stops the agent/service *processes* from staying down —
   it does not stop an administrator from disabling the service via Group
   Policy restrictions that this repo doesn't configure (see above).
-- **Screenshots and the activity log itself contain sensitive data** —
-  once a backend exists, both need the same encryption-at-rest and
-  access-control treatment described in the original architecture plan.
+- **Screenshots and the activity log itself contain sensitive data** — the
+  local file isn't encrypted at rest, and once events reach the backend
+  they're stored in plain PostgreSQL columns/JSONB, not field-level
+  encrypted. Both need the same encryption-at-rest and access-control
+  treatment as any other system handling employee monitoring data before a
+  real (non-pilot) rollout.
+- **Dashboard export/report generation is unauthenticated by network
+  position only** — anyone who can reach the API and has valid credentials
+  for a role can export data their role can see; there's no additional
+  step-up auth (e.g. re-entering a password) before a bulk export, only the
+  audit-log trail after the fact.
+- **PDF export was explicitly skipped** (CSV/XLSX only, per the original
+  scope) and the WebSocket alert broadcast (`/api/v1/ws/alerts`) only works
+  correctly with a single API replica — see `backend/README.md`'s
+  architecture notes for both.
 
-## Running a multi-laptop pilot (no backend yet)
+## Running a multi-laptop pilot (no backend needed)
 
-For a PM demo across 3 laptops, you don't need a backend — you need the 3
-laptops' log files in one folder, then one combined report.
+For a PM demo across 3 laptops, you don't need the backend running — you can
+still just collect the 3 laptops' log files into one folder and generate one
+combined report. (If the backend *is* running and all 3 agents have
+`EMPLOYEEAGENT_BACKEND_URL` set, the dashboard gives you the same overview
+live instead — this manual method is for when you want a quick demo without
+standing up infrastructure.)
 
 **Step 1 — get logs writing with a device-identifiable filename** (already
 done: every agent writes to `activity_<MACHINENAME>.log`, not a generic
@@ -206,9 +305,10 @@ done: every agent writes to `activity_<MACHINENAME>.log`, not a generic
   ```
   All 3 agents will then write directly into that shared folder — no
   manual copying needed, and (if it's a cloud-synced folder) you'll see
-  new events appear on your machine automatically. The Windows Service and
-  native messaging host both honor the same environment variable, so all
-  three components stay pointed at the same log file per machine.
+  new events appear on your machine automatically. Every component (the
+  Windows Service, native messaging host, and SyncLoop) honors the same
+  environment variable, so all of them stay pointed at the same log file
+  per machine.
 
 **Step 3 — generate the combined report:**
 
@@ -224,12 +324,22 @@ followed by a full detailed breakdown per device.
 *(If you only ever collect one laptop's log, `generate_report.py` still
 works exactly as before — no `--dir` needed, just point it at the file.)*
 
-## Next step (once you've validated this locally)
+## What's next
 
-Replace `ActivityLogger.Log()`'s file-write with an HTTPS POST to your
-backend API (once it exists), and switch local storage to the encrypted
-SQLite buffer from the original architecture — so events survive network
-outages instead of just accumulating forever in a flat file. The Windows
-Service, native messaging host, and browser extension would need the same
-treatment (or route everything through the local agent instead of writing
-to the log file directly) once that backend exists.
+The core loop (agent → backend → dashboard) is complete and working
+end-to-end. Reasonable next steps, roughly in priority order:
+
+- **Production security hardening**: encrypt the local log and screenshots
+  at rest, add field-level encryption for sensitive `activity_events`
+  columns in Postgres, and configure the Group Policy restriction on who
+  can stop `EmployeeAgentService` (see above).
+- **Confirm the HR-vs-Admin policy management decision** — `/admin/*` is
+  currently Admin-only; flag if HR should manage alert policies too.
+- **PDF export**, if actually needed beyond CSV/XLSX.
+- **A shared pub/sub for the WebSocket alert broadcast** (Postgres
+  LISTEN/NOTIFY or Redis) if the API ever needs to run as more than one
+  replica.
+- **Dashboard test coverage** (component/integration tests) — the backend
+  has pytest coverage for ingestion/auth/RBAC; the dashboard doesn't yet
+  have an equivalent.
+- **Firefox support** for full-URL tracking, if needed.
