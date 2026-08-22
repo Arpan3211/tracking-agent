@@ -125,10 +125,27 @@ def compute_idle_active(events):
     return total_idle_seconds, total_active_seconds, idle_periods
 
 
-def compute_app_usage(events):
+def _overlap_seconds(a_start, a_end, b_start, b_end):
+    latest_start = max(a_start, b_start)
+    earliest_end = min(a_end, b_end)
+    return max(0.0, (earliest_end - latest_start).total_seconds())
+
+
+def compute_app_usage(events, idle_periods):
+    """idle_periods (from compute_idle_active) is subtracted from each focus
+    interval so an app left focused while the user is away doesn't count as
+    'usage' of that app."""
     focus_events = [e for e in events if e["EventType"] == "app_focus_change"]
     usage_by_process = defaultdict(float)
     domain_counter = Counter()
+
+    url_counter = Counter()
+    for e in events:
+        if e["EventType"] != "website_visited":
+            continue
+        url = parse_details(e.get("Details")).get("url")
+        if url:
+            url_counter[url] += 1
 
     for i, e in enumerate(focus_events):
         details = parse_details(e.get("Details"))
@@ -138,10 +155,16 @@ def compute_app_usage(events):
             domain_counter[domain] += 1
 
         next_ts = focus_events[i + 1]["_ts"] if i + 1 < len(focus_events) else events[-1]["_ts"]
-        duration = max(0, (next_ts - e["_ts"]).total_seconds())
+        interval_start, interval_end = e["_ts"], next_ts
+
+        idle_overlap = sum(
+            _overlap_seconds(interval_start, interval_end, idle_start, idle_end)
+            for idle_start, idle_end in idle_periods
+        )
+        duration = max(0.0, (interval_end - interval_start).total_seconds() - idle_overlap)
         usage_by_process[process] += duration
 
-    return usage_by_process, domain_counter
+    return usage_by_process, domain_counter, url_counter
 
 
 # ---------- Section builders (per-device) ----------
@@ -195,17 +218,25 @@ def build_idle_active_summary(events):
 
 
 def build_app_usage(events):
-    usage_by_process, domain_counter = compute_app_usage(events)
+    _, _, idle_periods = compute_idle_active(events)
+    usage_by_process, domain_counter, url_counter = compute_app_usage(events, idle_periods)
     if not usage_by_process:
         return "## App Usage (Active Window Time)\n\nNo app focus data recorded.\n"
 
     lines = ["## App Usage (Active Window Time)\n"]
+    lines.append("*(idle time is excluded from these durations)*\n")
     lines.append("| App / Process | Time in Foreground |")
     lines.append("|---|---|")
     for process, seconds in sorted(usage_by_process.items(), key=lambda x: -x[1])[:15]:
         lines.append(f"| {process} | {fmt_duration(seconds)} |")
 
-    if domain_counter:
+    if url_counter:
+        lines.append("\n### Websites Visited (full URL, via browser extension)\n")
+        lines.append("| URL | Times Visited |")
+        lines.append("|---|---|")
+        for url, count in url_counter.most_common(15):
+            lines.append(f"| {url} | {count} |")
+    elif domain_counter:
         lines.append("\n### Websites Visited (best-effort, domain-level)\n")
         lines.append("| Domain | Times Seen |")
         lines.append("|---|---|")
@@ -213,12 +244,25 @@ def build_app_usage(events):
             lines.append(f"| {domain} | {count} |")
         lines.append(
             "\n*Note: domain extraction relies on the browser showing the URL in the window "
-            "title, which many sites don't do. Best-effort signal, not a reliable browsing "
-            "history \u2014 full URL tracking needs the browser extension.*"
+            "title, which many sites don't do. Best-effort signal \u2014 install the browser "
+            "extension (see README) for full-URL tracking instead.*"
         )
 
     lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def _file_event_path(e):
+    """file_created/renamed/changed/deleted store a raw path in Details;
+    file_opened (from ETW) stores a 'process=...; path=...' string instead -
+    normalize both to a single display string."""
+    details = e.get("Details") or ""
+    if e["EventType"] == "file_opened":
+        parsed = parse_details(details)
+        path = parsed.get("path", details)
+        process = parsed.get("process")
+        return f"{path} (opened by {process})" if process else path
+    return details
 
 
 def build_file_activity(events):
@@ -237,7 +281,7 @@ def build_file_activity(events):
     lines.append("| Time | Event | Path |")
     lines.append("|---|---|---|")
     for e in file_events[-15:]:
-        lines.append(f"| {fmt_ts(e['_ts'])} | {e['EventType']} | {e.get('Details', '')} |")
+        lines.append(f"| {fmt_ts(e['_ts'])} | {e['EventType']} | {_file_event_path(e)} |")
     if len(file_events) > 15:
         lines.append(f"\n*(showing last 15 of {len(file_events)} file events)*")
 
@@ -274,19 +318,63 @@ def build_network_usage(events):
         return "## Network Usage\n\nNo network usage data recorded.\n"
 
     total_sent = total_received = 0
+    per_process = defaultdict(lambda: [0, 0])  # [sent, received]
+
     for e in net_events:
         details = parse_details(e.get("Details"))
-        total_sent += int(details.get("bytes_sent", 0))
-        total_received += int(details.get("bytes_received", 0))
+        sent = int(details.get("bytes_sent", 0))
+        received = int(details.get("bytes_received", 0))
+        total_sent += sent
+        total_received += received
+
+        process = details.get("process", "unattributed (legacy whole-machine sample)")
+        per_process[process][0] += sent
+        per_process[process][1] += received
 
     lines = ["## Network Usage\n"]
     lines.append(f"- **Total sent:** {total_sent / 1_048_576:.2f} MB")
     lines.append(f"- **Total received:** {total_received / 1_048_576:.2f} MB")
     lines.append(f"- **Samples recorded:** {len(net_events)}")
+
+    lines.append("\n### By Process\n")
+    lines.append("| Process | Sent | Received |")
+    lines.append("|---|---|---|")
+    for process, (sent, received) in sorted(per_process.items(), key=lambda x: -(x[1][0] + x[1][1]))[:15]:
+        lines.append(f"| {process} | {sent / 1_048_576:.2f} MB | {received / 1_048_576:.2f} MB |")
+
     lines.append(
-        "\n*Note: this is whole-machine network usage, not per-app \u2014 Windows doesn't "
-        "expose a simple per-app bandwidth API.*"
+        "\n*Note: per-process attribution comes from ETW (Event Tracing for Windows) kernel "
+        "network events and requires the agent to run elevated (Administrator); without "
+        "elevation, network usage isn't tracked rather than falling back to a whole-machine "
+        "total.*"
     )
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def build_printer_activity(events):
+    printer_events = [e for e in events if e["EventType"] in ("print_job_submitted", "print_job_completed")]
+    if not printer_events:
+        return "## Printer Activity\n\nNo print jobs recorded.\n"
+
+    submitted = sum(1 for e in printer_events if e["EventType"] == "print_job_submitted")
+    completed = sum(1 for e in printer_events if e["EventType"] == "print_job_completed")
+
+    lines = ["## Printer Activity\n"]
+    lines.append(f"- **Print jobs submitted:** {submitted}")
+    lines.append(f"- **Print jobs completed:** {completed}")
+
+    lines.append("\n| Time | Event | Document | Owner | Printer | Pages |")
+    lines.append("|---|---|---|---|---|---|")
+    for e in printer_events[-15:]:
+        details = parse_details(e.get("Details"))
+        lines.append(
+            f"| {fmt_ts(e['_ts'])} | {e['EventType']} | {details.get('document', '')} | "
+            f"{details.get('owner', '')} | {details.get('printer', '')} | {details.get('total_pages', '')} |"
+        )
+    if len(printer_events) > 15:
+        lines.append(f"\n*(showing last 15 of {len(printer_events)} printer events)*")
+
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -335,12 +423,18 @@ def build_security_events(events):
         e for e in events
         if e["EventType"] in ("screen_locked", "screen_unlocked", "remote_connect", "remote_disconnect")
     ]
-    watchdog_events = [
+    # Covers both the legacy watchdog-era event names (older logs) and the
+    # current Windows Service supervisor's event names.
+    supervisor_events = [
         e for e in events
-        if e["EventType"] in ("watchdog_started", "agent_restarted_by_watchdog", "agent_restart_failed")
+        if e["EventType"] in (
+            "watchdog_started", "agent_restarted_by_watchdog", "agent_restart_failed",
+            "service_started", "service_stopped",
+            "session_agent_relaunched", "session_agent_relaunch_failed",
+        )
     ]
-    if not lock_events and not watchdog_events:
-        return "## Lock/Unlock & Anti-Tamper Events\n\nNo lock/unlock or watchdog events recorded.\n"
+    if not lock_events and not supervisor_events:
+        return "## Lock/Unlock & Anti-Tamper Events\n\nNo lock/unlock or supervisor events recorded.\n"
 
     lines = ["## Lock/Unlock & Anti-Tamper Events\n"]
     if lock_events:
@@ -351,15 +445,24 @@ def build_security_events(events):
             lines.append(f"| {fmt_ts(e['_ts'])} | {e['EventType']} |")
         lines.append("")
 
-    if watchdog_events:
-        restarts = [e for e in watchdog_events if e["EventType"] == "agent_restarted_by_watchdog"]
-        lines.append("### Watchdog / Anti-Tamper\n")
-        lines.append(f"- **Times the agent was force-restarted by the watchdog:** {len(restarts)}")
+    if supervisor_events:
+        restarts = [
+            e for e in supervisor_events
+            if e["EventType"] in ("agent_restarted_by_watchdog", "session_agent_relaunched")
+        ]
+        failures = [
+            e for e in supervisor_events
+            if e["EventType"] in ("agent_restart_failed", "session_agent_relaunch_failed")
+        ]
+        lines.append("### Anti-Tamper Supervisor (Windows Service)\n")
+        lines.append(f"- **Times the agent was force-restarted by the supervisor:** {len(restarts)}")
+        if failures:
+            lines.append(f"- **Relaunch failures:** {len(failures)}")
         if restarts:
-            lines.append("\n| Time | Details |")
-            lines.append("|---|---|")
+            lines.append("\n| Time | Event | Details |")
+            lines.append("|---|---|---|")
             for e in restarts:
-                lines.append(f"| {fmt_ts(e['_ts'])} | {e.get('Details', '')} |")
+                lines.append(f"| {fmt_ts(e['_ts'])} | {e['EventType']} | {e.get('Details', '')} |")
         lines.append("\n*A non-zero restart count usually means someone manually killed the agent process.*")
 
     lines.append("")
@@ -377,6 +480,7 @@ def build_device_report(device_name, events, log_path):
         build_screenshots(events),
         build_network_usage(events),
         build_device_activity(events),
+        build_printer_activity(events),
         build_location(events),
         build_security_events(events),
     ]
@@ -395,12 +499,12 @@ def build_overview_table(devices):
             continue
 
         span = fmt_duration((events[-1]["_ts"] - events[0]["_ts"]).total_seconds())
-        idle_s, active_s, _ = compute_idle_active(events)
+        idle_s, active_s, idle_periods = compute_idle_active(events)
         total = idle_s + active_s
         idle_pct = f"{(idle_s / total * 100):.0f}%" if total > 0 else "\u2014"
         active_pct = f"{(active_s / total * 100):.0f}%" if total > 0 else "\u2014"
 
-        usage_by_process, _ = compute_app_usage(events)
+        usage_by_process, _, _ = compute_app_usage(events, idle_periods)
         top_app = max(usage_by_process, key=usage_by_process.get) if usage_by_process else "\u2014"
 
         lines.append(f"| {name} | {len(events)} | {span} | {idle_pct} | {active_pct} | {top_app} |")

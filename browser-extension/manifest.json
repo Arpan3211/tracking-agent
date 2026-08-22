@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Employee Agent - Full URL Tracking",
+  "version": "1.0.0",
+  "description": "Reports the active tab's full URL to the local EmployeeAgent native host for activity logging. Corporate-managed extension - see repo README for deployment/consent requirements.",
+  "permissions": ["tabs", "nativeMessaging"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "minimum_chrome_version": "88"
+}
