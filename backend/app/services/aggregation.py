@@ -137,14 +137,13 @@ def _compute_active_idle_seconds(
 def _compute_top_apps(
     events: list[ActivityEvent], idle_periods: list[tuple[datetime, datetime]], limit: int = 10
 ) -> dict[str, int]:
-    """Same idle-subtraction approach as tools/generate_report.py's
-    compute_app_usage() - kept in sync deliberately so the dashboard and the
-    standalone report script never disagree about what 'active time' means."""
+    """Subtracts idle-overlap from each app-focus interval so leaving an app
+    focused while away from the machine doesn't inflate its usage time."""
     focus_events = [e for e in events if e.event_type == "app_focus_change"]
     usage: dict[str, float] = defaultdict(float)
 
     for i, e in enumerate(focus_events):
-        process = (e.details_parsed or {}).get("process", "unknown")
+        process = (e.details or {}).get("process", "unknown")
         next_ts = focus_events[i + 1].timestamp_utc if i + 1 < len(focus_events) else events[-1].timestamp_utc
 
         idle_overlap = sum(_overlap_seconds(e.timestamp_utc, next_ts, s, en) for s, en in idle_periods)

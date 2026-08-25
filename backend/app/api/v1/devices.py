@@ -13,7 +13,7 @@ from app.models.daily_activity_summary import DailyActivitySummary
 from app.models.device import Device
 from app.models.session import DeviceSession
 from app.models.user import User
-from app.schemas.activity import ActivityEventOut, ActivitySummaryOut
+from app.schemas.activity import ActivityEventOut, ActivitySummaryOut, IdlePeriodOut
 from app.schemas.device import DeviceOut
 from app.schemas.pagination import Page
 from app.schemas.session import SessionOut
@@ -86,19 +86,64 @@ async def get_activity_summary(
     return list(result.scalars().all())
 
 
+@router.get("/{device_id}/idle-periods", response_model=list[IdlePeriodOut])
+async def get_idle_periods(
+    device: Device = Depends(get_accessible_device),
+    db: AsyncSession = Depends(get_db),
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None),
+    limit: int = Query(default=100, le=500),
+) -> list[IdlePeriodOut]:
+    """Pairs idle_start/idle_end events into (start, end, duration) periods -
+    the per-pause breakdown behind DailyActivitySummary.total_idle_seconds,
+    which only has the daily total, not individual pauses. Computed here on
+    the fly rather than stored, same pairing approach as aggregation.py's
+    _compute_idle_periods() but exposed for direct display instead of being
+    an intermediate step toward a daily sum."""
+    query = select(ActivityEvent).where(
+        ActivityEvent.device_id == device.id,
+        ActivityEvent.event_type.in_(("idle_start", "idle_end")),
+    )
+    if from_ is not None:
+        query = query.where(ActivityEvent.timestamp_utc >= from_)
+    if to is not None:
+        query = query.where(ActivityEvent.timestamp_utc <= to)
+    result = await db.execute(query.order_by(ActivityEvent.timestamp_utc))
+    events = result.scalars().all()
+
+    periods: list[IdlePeriodOut] = []
+    idle_start: datetime | None = None
+    for event in events:
+        if event.event_type == "idle_start":
+            idle_start = event.timestamp_utc
+        elif event.event_type == "idle_end" and idle_start is not None:
+            duration = int((event.timestamp_utc - idle_start).total_seconds())
+            periods.append(IdlePeriodOut(start=idle_start, end=event.timestamp_utc, duration_seconds=duration))
+            idle_start = None
+
+    # A trailing idle_start with no matching idle_end yet means the device
+    # is idle right now - surface it as an ongoing period, same convention
+    # get_device_sessions uses for a session with no logout_at yet.
+    if idle_start is not None:
+        periods.append(IdlePeriodOut(start=idle_start, end=None, duration_seconds=None))
+
+    periods.reverse()  # most recent first, matching get_device_sessions
+    return periods[:limit]
+
+
 @router.get("/{device_id}/events", response_model=Page[ActivityEventOut])
 async def get_device_events(
     device: Device = Depends(get_accessible_device),
     db: AsyncSession = Depends(get_db),
-    event_type: str | None = Query(default=None),
+    event_type: list[str] | None = Query(default=None),
     from_: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, le=500),
 ) -> Page[ActivityEventOut]:
     query = select(ActivityEvent).where(ActivityEvent.device_id == device.id)
-    if event_type is not None:
-        query = query.where(ActivityEvent.event_type == event_type)
+    if event_type:
+        query = query.where(ActivityEvent.event_type.in_(event_type))
     if from_ is not None:
         query = query.where(ActivityEvent.timestamp_utc >= from_)
     if to is not None:

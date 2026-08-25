@@ -18,11 +18,11 @@ async def test_ingest_events_with_valid_key(client):
         json={
             "machine_name": "PYTEST-PC",
             "events": [
-                {"event_type": "login", "timestamp_utc": "2026-01-01T08:00:00Z", "details": "someuser"},
+                {"event_type": "login", "timestamp_utc": "2026-01-01T08:00:00Z", "details": {"username": "someuser"}},
                 {
                     "event_type": "app_focus_change",
                     "timestamp_utc": "2026-01-01T08:01:00Z",
-                    "details": "process=chrome; title=Test",
+                    "details": {"process": "chrome", "title": "Test"},
                 },
             ],
         },

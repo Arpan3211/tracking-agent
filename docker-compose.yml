@@ -2,16 +2,21 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-employee_agent}
+    # Reads POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB straight from
+    # backend/.env - the SAME file api's DATABASE_URL is built from - so the
+    # two can never drift apart. (Previously these came from
+    # ${VAR:-default} Compose substitution, which only reads a root-level
+    # .env/shell env; since this repo never uses one, it silently always
+    # fell back to the literal default "postgres" here regardless of
+    # whatever password was actually set in backend/.env.)
+    env_file:
+      - ./backend/.env
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,10 +24,11 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
+    # DATABASE_URL comes from backend/.env directly (see .env.example) -
+    # matches db's credentials above by construction, since both read the
+    # same file. No Compose-level override needed.
     env_file:
       - ./backend/.env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-employee_agent}
     ports:
       - "8000:8000"
     depends_on:

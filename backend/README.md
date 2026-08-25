@@ -1,106 +1,129 @@
 # Employee Agent — Backend
 
-FastAPI + PostgreSQL backend for the Employee Agent monitoring stack: receives
-batched activity events from the Windows agent, aggregates them into sessions
-and daily summaries, evaluates alert policies, and serves the dashboard API.
+## What this is
+
+FastAPI + PostgreSQL backend for the Employee Agent monitoring stack: it
+receives batched activity events from the Windows agent, aggregates them
+into sessions and daily summaries, evaluates alert policies, and serves the
+dashboard API (auth, devices, reports, alerts, admin).
 
 See the root [README.md](../README.md) for how this fits together with the
-agent and (once built) the dashboard.
+agent and the dashboard, and [CODE_EXPLAINED.md](CODE_EXPLAINED.md) for a
+file-by-file walkthrough of everything in this folder.
 
-## Stack
+## Running it locally
 
-FastAPI (async) · PostgreSQL via SQLAlchemy 2.0 (async) + Alembic · Pydantic
-v2 · JWT auth (httpOnly cookies) via PyJWT · APScheduler (in-process) ·
-Docker Compose.
+Everything runs through Docker Compose, driven from the repo root (the
+`docker-compose.yml` that defines `db` and `api` lives there, not in this
+folder).
 
-## Local setup
-
-From the repo root:
+**1. Configure environment variables:**
 
 ```bash
 cp backend/.env.example backend/.env
 # edit backend/.env - at minimum set JWT_SECRET_KEY and SEED_ADMIN_PASSWORD.
 # For local http:// (not https) testing, also set COOKIE_SECURE=false -
 # browsers/clients won't send Secure-flagged cookies over plain HTTP.
+```
 
+**2. Start Postgres, then build and start the API:**
+
+```bash
 docker compose up -d db
 docker compose build api
 docker compose up -d api
 ```
 
-Note: `docker compose restart api` picks up code changes (the backend
-directory is volume-mounted), but env var changes in `backend/.env` require
-`docker compose up -d --force-recreate api` - a restart alone reuses the
-container's already-baked-in environment.
-
-### Run migrations
+**3. Run database migrations:**
 
 ```bash
 docker compose exec api alembic upgrade head
 ```
 
-To create a new migration after changing models in `app/models/`:
-
-```bash
-docker compose exec api alembic revision --autogenerate -m "describe the change"
-docker compose exec api alembic upgrade head
-```
-
-### Seed the first Admin user
-
-Uses `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_FULL_NAME` from
-`backend/.env`:
+**4. Seed the first Admin user** (uses `SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD` / `SEED_ADMIN_FULL_NAME` from `backend/.env`):
 
 ```bash
 docker compose exec api python -m scripts.seed_admin
 ```
 
-### Verify it's up
+**5. Verify it's up:**
 
 ```bash
 curl http://localhost:8000/health
 # API docs (Swagger UI): http://localhost:8000/docs
 ```
 
-## Running tests
-
-Tests run against a **separate** database (`employee_agent_test`), created
-once:
+**6. Stopping it:**
 
 ```bash
-docker compose exec db psql -U postgres -c "CREATE DATABASE employee_agent_test;"
+docker compose stop api db
 ```
 
-Then:
+This stops both containers but keeps them (and the Postgres data volume)
+around, so `docker compose up -d db` / `docker compose up -d api` starts
+right back up where you left off. If you want to remove the containers too
+(not just stop them):
 
 ```bash
-docker compose exec api pytest -v
+docker compose down
 ```
 
-Each test drops and recreates every table before it runs (see
-`tests/conftest.py`) - slower than transaction-rollback isolation, but
-correct given route handlers call `db.commit()` themselves, which would
-otherwise defeat rollback-based isolation.
+Postgres data still survives this - it's the named volume the compose file
+gives `db`, not the container. Only add `-v` (`docker compose down -v`) if
+you actually want to **wipe the database**, e.g. to start migrations over
+from scratch; there's no confirmation prompt, so don't run it out of habit.
 
-## Pointing a test agent at the local backend
+Once code changes, `docker compose restart api` picks them up (the backend
+directory is volume-mounted into the container). Changes to `backend/.env`
+need a harder reset: `docker compose up -d --force-recreate api` - a plain
+restart reuses the container's already-baked-in environment variables.
 
-The C# agent doesn't call this API yet - `ActivityLogger.cs`'s sync loop
-(POSTs to `/api/v1/ingest/events`) is the next milestone (see root README).
-To exercise ingestion manually in the meantime:
+To add a new migration after changing a model in `app/models/`:
 
 ```bash
-# 1. Enroll a device, get its API key
-curl -X POST http://localhost:8000/api/v1/devices/enroll \
-  -H "Content-Type: application/json" \
-  -d '{"machine_name":"MY-TEST-PC","os_version":"Windows 11"}'
-
-# 2. POST a batch of events using that key
-curl -X POST http://localhost:8000/api/v1/ingest/events \
-  -H "Content-Type: application/json" -H "X-API-Key: <api_key from step 1>" \
-  -d '{"machine_name":"MY-TEST-PC","events":[
-        {"event_type":"login","timestamp_utc":"2026-01-01T08:00:00Z","details":"someuser"}
-      ]}'
+docker compose exec api alembic revision --autogenerate -m "describe the change"
+docker compose exec api alembic upgrade head
 ```
+
+## Why it's set up to run this way locally
+
+This is a **pilot-scale, single-machine deployment target**, not a
+production cluster, and the local setup is deliberately built around that:
+
+- **Docker Compose instead of a bare `uvicorn` process** so PostgreSQL comes
+  up identically for every developer without anyone installing Postgres
+  natively - the same `docker-compose.yml` at the repo root is the only
+  thing standing between "clone the repo" and "have a working database,"
+  which matters more here than in a team with a shared managed dev database.
+- **The API container volume-mounts the `backend/` directory** rather than
+  baking a fixed image per change, so `docker compose restart api` is enough
+  to pick up code edits - no rebuild loop while iterating. `.env` values are
+  still read once at container start, which is why they need
+  `--force-recreate` instead of a restart; that split is a real gotcha
+  worth knowing before you spend time debugging "my env var isn't taking
+  effect."
+- **Migrations and seeding are explicit manual steps**, not something that
+  runs automatically on container start, so a failed migration or a bad seed
+  doesn't silently break the `api` container's boot and mask the real error
+  - you run `alembic upgrade head` and `seed_admin` yourself and see exactly
+  what happened.
+- **`COOKIE_SECURE=false` is an explicit opt-in**, not the default, because
+  auth here uses httpOnly cookies that browsers refuse to send over plain
+  `http://` when marked `Secure`. Production should never set this to
+  `false`; it exists purely so `localhost` development (dashboard on
+  `http://localhost:5173`, API on `http://localhost:8000`) works at all.
+- **The scheduler (aggregation + alerts) runs in-process** inside the same
+  `api` container rather than as a separate worker service, so there's
+  nothing extra to start locally beyond `db` and `api` - see the Tech stack
+  and Architecture notes below for why that's also fine at this scale in
+  general, not just for local dev.
+
+## Tech stack
+
+FastAPI (async) · PostgreSQL via SQLAlchemy 2.0 (async) + Alembic · Pydantic
+v2 · JWT auth (httpOnly cookies) via PyJWT · APScheduler (in-process) ·
+Docker Compose.
 
 ## Architecture notes
 
@@ -124,10 +147,9 @@ curl -X POST http://localhost:8000/api/v1/ingest/events \
   incrementally updating them. Delete-then-rebuild is trivially correct and
   cheap enough at pilot scale; revisit with a proper watermark/incremental
   approach if `activity_events` ever grows large enough for a full per-device
-  scan to get slow. Its idle-aware app-usage math is deliberately kept in
-  sync with `tools/generate_report.py`'s `compute_app_usage()` in the agent
-  repo root - same idle-subtraction logic, so the dashboard and the
-  standalone report script never disagree about what "active time" means.
+  scan to get slow. Its idle-aware app-usage math (`compute_app_usage()`)
+  subtracts idle-overlap from each app-focus interval, so leaving an app
+  focused while away from the machine doesn't inflate its usage time.
 - **Alerts** (`app/services/alerts_engine.py`) evaluate active policies
   every `ALERT_EVALUATION_INTERVAL_MINUTES` (default 5). Both rule types
   (`idle_threshold`, `late_login`) dedupe against re-firing on every tick by
@@ -145,3 +167,46 @@ curl -X POST http://localhost:8000/api/v1/ingest/events \
   assignment and policy thresholds are more sensitive than the read-only
   dashboard scoping HR also gets. Flagged as a decision worth confirming, not
   an unambiguous spec requirement.
+
+## Running tests
+
+Tests run against a **separate** database (`employee_agent_test`), created
+once:
+
+```bash
+docker compose exec db psql -U postgres -c "CREATE DATABASE employee_agent_test;"
+```
+
+Then:
+
+```bash
+docker compose exec api pytest -v
+```
+
+Each test drops and recreates every table before it runs (see
+`tests/conftest.py`) - slower than transaction-rollback isolation, but
+correct given route handlers call `db.commit()` themselves, which would
+otherwise defeat rollback-based isolation.
+
+## Pointing a test agent at the local backend
+
+The Windows agent's `SyncLoop` (see
+`monitoring-agent/EmployeeAgent/Core/SyncLoop.cs`) already does this
+automatically once `EMPLOYEEAGENT_BACKEND_URL` is set - it enrolls the
+device, caches the API key, and batches events to `/api/v1/ingest/events`.
+If you're developing from a non-Windows machine and don't have a real agent
+to run, you can exercise the same ingestion flow manually:
+
+```bash
+# 1. Enroll a device, get its API key
+curl -X POST http://localhost:8000/api/v1/devices/enroll \
+  -H "Content-Type: application/json" \
+  -d '{"machine_name":"MY-TEST-PC","os_version":"Windows 11"}'
+
+# 2. POST a batch of events using that key
+curl -X POST http://localhost:8000/api/v1/ingest/events \
+  -H "Content-Type: application/json" -H "X-API-Key: <api_key from step 1>" \
+  -d '{"machine_name":"MY-TEST-PC","events":[
+        {"event_type":"login","timestamp_utc":"2026-01-01T08:00:00Z","details":{"username":"someuser"}}
+      ]}'
+```

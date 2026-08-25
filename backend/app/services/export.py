@@ -6,11 +6,17 @@ from openpyxl.utils import get_column_letter
 
 from app.models.activity_event import ActivityEvent
 
-COLUMNS = ["timestamp_utc", "event_type", "details_raw", "received_at"]
+COLUMNS = ["timestamp_utc", "event_type", "details", "received_at"]
+
+
+def _format_details(details: dict | None) -> str:
+    if not details:
+        return ""
+    return "; ".join(f"{k}={v}" for k, v in details.items())
 
 
 def _row(e: ActivityEvent) -> list[str]:
-    return [e.timestamp_utc.isoformat(), e.event_type, e.details_raw or "", e.received_at.isoformat()]
+    return [e.timestamp_utc.isoformat(), e.event_type, _format_details(e.details), e.received_at.isoformat()]
 
 
 def export_events_csv(events: list[ActivityEvent]) -> io.BytesIO:

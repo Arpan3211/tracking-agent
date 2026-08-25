@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,11 +22,10 @@ class ActivityEvent(Base):
     device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     timestamp_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    # Raw "key=value; key2=value2" string exactly as the agent sent it, kept
-    # verbatim for auditability/debugging even though details_parsed is what
-    # queries actually use.
-    details_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
-    details_parsed: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Structured payload exactly as the agent sent it (e.g. {"process": "chrome",
+    # "title": "..."}) - the agent builds this per event type and sends it as
+    # real JSON, so there is no server-side string parsing step anymore.
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     device: Mapped["Device"] = relationship("Device")  # noqa: F821

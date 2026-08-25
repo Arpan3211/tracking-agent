@@ -1,0 +1,658 @@
+:root {
+  color-scheme: light;
+
+  /* Neutrals - warm off-white/white surfaces, soft near-black ink (never
+     pure #000 - a true black next to a bright yellow accent reads harsh;
+     this warm near-black is what makes the palette feel considered rather
+     than just "yellow on a Bootstrap default"). */
+  --surface-page: #faf9f5;
+  --surface-card: #ffffff;
+  --surface-sunken: #f3f1ea;
+  --text-primary: #14140f;
+  --text-secondary: #52514e;
+  --text-muted: #86847c;
+  --border: #e7e4da;
+  --border-strong: #d3cfc2;
+
+  /* Brand accent - yellow. --accent is deliberately only ever used as a
+     FILLED surface (buttons, active pills, badges) paired with dark text -
+     bright yellow as body text or a thin border/outline on white fails
+     contrast (~1.4:1). --accent-ink is the same hue darkened to 5.7:1+ on
+     white, for links and any accent color that has to appear as text or a
+     visible outline. Verified with the dataviz skill's contrast() checker,
+     not eyeballed. */
+  --accent: #ffd400;
+  --accent-strong: #e0c000;
+  --accent-ink: #7a5d00;
+  --accent-soft: #fff6d6;
+
+  /* Sidebar - "light black": a warm charcoal, not navy, not pure black. */
+  --sidebar-width: 240px;
+  --sidebar-bg: #17170f;
+  --sidebar-bg-elevated: #201f17;
+  --sidebar-text: #b8b6a8;
+  --sidebar-text-active: #14140f;
+
+  /* Status - reserved meaning, never reused for a series color (a status
+     hue "impersonating" a data series is a real anti-pattern). Distinct
+     from --accent so a warning/critical badge is never mistaken for a
+     plain brand-yellow UI element. status-serious-ink is a darkened
+     text-safe variant, matching status-good/critical which are already
+     dark enough on white to double as their own text color. */
+  --status-good: #106b2e;
+  --status-warning: #d97a0a;
+  --status-serious: #c25b0a;
+  --status-serious-ink: #9a4a08;
+  --status-critical: #c22f3b;
+
+  /* Categorical (event identity, see lib/eventMeta.ts) - a 10-hue set
+     validated with the dataviz skill's six-check palette validator
+     (lightness band, chroma floor, CVD adjacency, normal-vision
+     separation, contrast) in this exact display order, on this exact
+     --surface-page. Re-run the validator before reordering or recoloring
+     any of these. */
+  --series-blue: #2a78d6;
+  --series-orange: #eb6834;
+  --series-teal: #1baf7a;
+  --series-amber: #eda100;
+  --series-purple: #4a3aa7;
+  --series-red: #e34948;
+  --series-green: #008300;
+  --series-pink: #e87ba4;
+  --series-emerald: #0f8a5f;
+  --series-rust: #9b5a1e;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 15, 0.06);
+  --shadow-md: 0 8px 24px -8px rgba(20, 20, 15, 0.12), 0 1px 2px rgba(20, 20, 15, 0.05);
+
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* One consistent keyboard-focus treatment across every interactive
+   element, instead of leaving it to inconsistent browser defaults - a
+   3px ring at 6:1+ contrast (--accent-ink) is visible on every surface
+   this app has (white cards, the dark sidebar, yellow-filled buttons). */
+:focus-visible {
+  outline: 3px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+a {
+  /* --accent-ink, not --accent - bright yellow text on a light page fails
+     contrast (~1.4:1); the darkened ink variant clears WCAG AA (5.7:1). */
+  color: var(--accent-ink);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- app shell */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-elevated) 130%);
+  padding: 22px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* --accent-ink (the global :focus-visible color) is only ~2.9:1 against
+   this dark sidebar - not enough. The bright accent itself clears 12.5:1
+   here, so the sidebar gets its own focus color instead of the site-wide
+   one. */
+.sidebar :focus-visible {
+  outline-color: var(--accent);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  padding: 0 8px 22px;
+}
+
+.sidebar-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Dark ink, not white - the mark is a solid yellow fill. */
+  color: var(--text-primary);
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px -2px rgba(255, 212, 0, 0.45);
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.sidebar-link.active {
+  background: var(--accent);
+  /* --sidebar-text-active is the dark ink token, not white - it's sitting
+     on a bright yellow fill here, not the dark sidebar background. */
+  color: var(--sidebar-text-active);
+  box-shadow: 0 4px 12px -2px rgba(255, 212, 0, 0.4);
+}
+
+.sidebar-section-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: rgba(162, 164, 196, 0.6);
+  padding: 18px 12px 6px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  color: var(--sidebar-text);
+}
+
+.sidebar-footer > div:first-child {
+  color: #fff;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.sidebar-footer .chip-role {
+  margin-top: 4px;
+}
+
+.main {
+  flex: 1;
+  padding: 30px 36px 60px;
+  max-width: 1320px;
+  min-width: 0;
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.page-header h1 {
+  font-size: 21px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: -14px;
+  margin-bottom: 22px;
+}
+
+.page-loading {
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------- card */
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+.card-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-title-sub {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stat-tile {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stat-tile-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-tile-body {
+  min-width: 0;
+}
+
+.stat-tile-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.stat-tile-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* -------------------------------------------------------------------- table */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 9px 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.data-table a {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* ------------------------------------------------------------ event badges */
+
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.event-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.event-summary {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.event-raw-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 0;
+  margin-left: 8px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.event-raw {
+  margin-top: 4px;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: 6px;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* -------------------------------------------------------------- category pills */
+
+.category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.12s;
+}
+
+.category-pill:hover {
+  border-color: var(--border-strong);
+}
+
+.category-pill.active {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: #fff;
+}
+
+.category-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-pill-count {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.category-pill.active .category-pill-count {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* -------------------------------------------------------------------- forms */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.form-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-field input,
+.form-field select {
+  padding: 8px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text-primary);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  /* --accent-ink for both: a focus indicator needs >=3:1 contrast against
+     the surface behind it (WCAG 2.4.11) - the bright accent yellow itself
+     is ~1.4:1 on white and would be nearly invisible as a ring/border. */
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 1px;
+  border-color: var(--accent-ink);
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.btn {
+  padding: 8px 15px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.12s;
+}
+
+.btn:hover {
+  background: var(--surface-sunken);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* Dark ink text, not white - white-on-yellow is ~1.4:1 and close to
+     unreadable; dark ink on this yellow is 13.75:1. */
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background: var(--accent-strong);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-text {
+  color: var(--status-critical);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+/* ------------------------------------------------------------------- chips */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.chip-unread {
+  background: color-mix(in srgb, var(--status-serious) 15%, transparent);
+  /* The dot below uses the lighter --status-serious (fine at 3:1+ for a
+     small graphical dot); the chip's own text needs the darker ink
+     variant to clear 4.5:1 as actual text. */
+  color: var(--status-serious-ink);
+}
+
+.chip-unread .chip-dot {
+  background: var(--status-serious);
+}
+
+.chip-acknowledged {
+  background: color-mix(in srgb, var(--status-good) 15%, transparent);
+  color: var(--status-good);
+}
+
+.chip-acknowledged .chip-dot {
+  background: var(--status-good);
+}
+
+.chip-role {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--sidebar-text);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-transform: capitalize;
+}
+
+/* ---------------------------------------------------------------- utility */
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 212, 0, 0.16), transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(20, 20, 15, 0.05), transparent 45%),
+    var(--surface-page);
+}
+
+.login-card {
+  width: 360px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 32px 30px;
+}
+
+.login-card h1 {
+  font-size: 19px;
+  margin: 0 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.section-gap {
+  margin-top: 28px;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

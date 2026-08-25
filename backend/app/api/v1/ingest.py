@@ -11,7 +11,6 @@ from app.models.activity_event import ActivityEvent
 from app.models.device import Device
 from app.schemas.activity import IngestRequest, IngestResponse
 from app.schemas.device import DeviceEnrollRequest, DeviceEnrollResponse
-from app.services.parsing import parse_details
 
 router = APIRouter()
 
@@ -58,8 +57,7 @@ async def ingest_events(
                 device_id=device.id,
                 event_type=event.event_type,
                 timestamp_utc=event.timestamp_utc,
-                details_raw=event.details,
-                details_parsed=parse_details(event.details),
+                details=event.details,
             )
         )
 

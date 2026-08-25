@@ -7,7 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class ActivityEventIn(BaseModel):
     event_type: str
     timestamp_utc: datetime
-    details: str | None = None
+    # Structured per-event-type payload the agent builds directly (e.g.
+    # {"process": "chrome", "title": "..."}), not a delimited string - stored
+    # as-is in activity_events.details (JSONB), no server-side parsing.
+    details: dict[str, str] | None = None
 
 
 class IngestRequest(BaseModel):
@@ -30,8 +33,7 @@ class ActivityEventOut(BaseModel):
     device_id: uuid.UUID
     event_type: str
     timestamp_utc: datetime
-    details_raw: str | None
-    details_parsed: dict | None
+    details: dict | None
     received_at: datetime
 
 
@@ -44,3 +46,14 @@ class ActivitySummaryOut(BaseModel):
     total_idle_seconds: int
     top_apps: dict | None
     event_count: int
+
+
+class IdlePeriodOut(BaseModel):
+    """One idle_start->idle_end pair, computed on the fly from raw events
+    (not stored - see get_idle_periods in app/api/v1/devices.py). end/
+    duration_seconds are null for a period that's still ongoing (the device
+    is idle right now and hasn't sent a matching idle_end yet)."""
+
+    start: datetime
+    end: datetime | None
+    duration_seconds: int | None
