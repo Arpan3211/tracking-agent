@@ -55,6 +55,15 @@ services:
         value: "true"
       - key: COOKIE_DOMAIN
         value: ""
+      # "none" because the dashboard is a separate origin from this backend
+      # (e.g. run locally via `npm run dev` at localhost:5173, or deployed
+      # elsewhere) - browsers won't attach a Lax cookie to cross-site
+      # fetch/XHR at all, which would silently break every authenticated
+      # dashboard request. Requires COOKIE_SECURE=true above.
+      - key: COOKIE_SAMESITE
+        value: none
+      # Update this to the dashboard's actual origin(s) - the default here
+      # only covers `npm run dev`'s localhost:5173.
       - key: CORS_ORIGINS
         value: '["http://localhost:5173"]'
       - key: AGGREGATION_INTERVAL_MINUTES

@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     # Cookies
     cookie_secure: bool = True
     cookie_domain: str | None = None
+    # "lax" works when the dashboard and API share an origin (local dev via
+    # the Vite proxy, or same-domain production). A dashboard hosted on a
+    # different origin than the API needs "none" instead - browsers refuse
+    # to attach Lax cookies to cross-site fetch/XHR requests at all (only to
+    # top-level navigations), which would silently break every authenticated
+    # request. "none" requires cookie_secure=True (browsers reject
+    # SameSite=None without Secure).
+    cookie_samesite: str = "lax"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]

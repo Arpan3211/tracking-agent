@@ -1,4 +1,9 @@
-const API_BASE = '/api/v1'
+// Empty/unset -> relative '/api/v1', which relies on vite.config.ts's dev
+// proxy (or a same-domain production deploy) to reach the API same-origin.
+// Set VITE_API_BASE_URL to a full origin (e.g.
+// https://employee-agent-backend.onrender.com/api/v1) to call a
+// differently-hosted backend directly instead - see frontend/.env.example.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
@@ -108,6 +113,13 @@ export function exportUrl(deviceId: string, format: 'csv' | 'xlsx', from?: strin
 }
 
 export function websocketUrl(path: string): string {
+  // API_BASE is a full origin when pointed at a differently-hosted backend
+  // (VITE_API_BASE_URL set) - the socket must dial that host, not this
+  // page's own, or it'd try to open a WS connection to a server that has no
+  // idea what /api/v1/ws/... is.
+  if (/^https?:\/\//.test(API_BASE)) {
+    return `${API_BASE.replace(/^http/, 'ws')}${path}`
+  }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}${API_BASE}${path}`
 }
