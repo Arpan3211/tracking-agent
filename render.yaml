@@ -23,6 +23,14 @@
 # per deploy. Both steps are safe to repeat (alembic no-ops once at head,
 # seed_admin skips if the admin already exists), which is what makes this OK
 # even though it fires on every free-tier spin-up after idling.
+#
+# It points at backend/render-start.sh rather than inlining "a && b && c"
+# here because Render's dockerCommand does a plain whitespace split with NO
+# shell interpretation - a one-line chained command gets torn into literal
+# argv elements (alembic ends up receiving "&&" as one of its own CLI args).
+# Two space-free tokens ("sh render-start.sh") survive that split intact,
+# and the chaining happens inside the script instead, where a real shell
+# parses it.
 services:
   - type: web
     name: employee-agent-backend
@@ -31,7 +39,7 @@ services:
     dockerContext: ./backend
     plan: free
     healthCheckPath: /health
-    dockerCommand: "alembic upgrade head && python -m scripts.seed_admin && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    dockerCommand: sh render-start.sh
     envVars:
       - key: DATABASE_URL
         sync: false
