@@ -188,6 +188,71 @@ Each test drops and recreates every table before it runs (see
 correct given route handlers call `db.commit()` themselves, which would
 otherwise defeat rollback-based isolation.
 
+## Deploying a pilot instance (free tier, for testing on real devices)
+
+For trying the full flow (agent → backend → dashboard) on a handful of real
+machines before committing to real hosting, this repo's `render.yaml`
+deploys the backend to Render's free Web Service plan, which gives you a
+working `https://<name>.onrender.com` URL with HTTPS already valid - no
+domain purchase or reverse-proxy/TLS setup needed. The database is a
+separate free [Neon](https://neon.tech) Postgres project, not Render's free
+Postgres - Render's free Postgres auto-deletes itself after 30 days, Neon's
+free tier doesn't expire.
+
+**1. Create the database** - sign up at [neon.tech](https://neon.tech) (no
+card required), create a project, and copy the connection string it gives
+you. Rewrite it into SQLAlchemy's async form and add `?ssl=require`:
+
+```text
+postgresql+asyncpg://<user>:<password>@<your-project>.neon.tech/<dbname>?ssl=require
+```
+
+**2. Deploy the backend** - sign up at [render.com](https://render.com),
+**New → Blueprint**, point it at this GitHub repo. Render reads
+`render.yaml` at the repo root and provisions one free Web Service built
+from `backend/Dockerfile`. It'll prompt for the env vars marked
+`sync: false` in that file - paste in:
+
+- `DATABASE_URL` - the Neon connection string from step 1
+- `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` - your first Admin login
+
+Everything else (JWT secret, cookie/CORS settings, scheduler intervals) is
+already set in `render.yaml`. On deploy, Render runs `alembic upgrade head`
+and the idempotent `seed_admin` script automatically (via
+`preDeployCommand`) before starting the service - no manual migration step
+like the local Docker Compose flow above.
+
+**3. Verify it's up:**
+
+```bash
+curl https://<your-service-name>.onrender.com/health
+```
+
+**4. Point the MSI at it** - use that same URL with
+`monitoring-agent/install/build-installer.ps1`:
+
+```powershell
+.\build-installer.ps1 -BackendUrl "https://<your-service-name>.onrender.com" -Version "1.0.0"
+```
+
+**Known pilot-tier limits, not bugs:**
+
+- The free Web Service spins down after 15 minutes idle and takes ~30-60s to
+  wake on the next request - a device's first sync after a quiet period may
+  be slow, not lost (the agent's local SQLite queue just holds events until
+  the sync succeeds).
+- Neon's free compute suspends after 5 minutes idle too, with a sub-second
+  wake - not noticeable in practice.
+- `CORS_ORIGINS` in `render.yaml` only allows `http://localhost:5173` (the
+  local dashboard dev server) - update it to your deployed frontend's origin
+  once you host the dashboard somewhere too, or dashboard logins will fail
+  with a CORS error even though ingestion (which doesn't use CORS) keeps
+  working.
+- When you move to real hosting (e.g. Azure), swap `DATABASE_URL` to the new
+  database, redeploy the container there, then rebuild the MSI with the new
+  `-BackendUrl` and roll it out as a version bump - `Product.wxs`'s
+  `MajorUpgrade` element already handles upgrading existing installs cleanly.
+
 ## Pointing a test agent at the local backend
 
 The Windows agent's `SyncLoop` (see

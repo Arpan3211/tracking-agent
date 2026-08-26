@@ -1,0 +1,55 @@
+# Render Blueprint - deploys the FastAPI backend as a free Web Service.
+#
+# Usage: Render dashboard -> New -> Blueprint -> pick this repo. Render reads
+# this file, provisions the service, and prompts for the "sync: false" env
+# vars below (DATABASE_URL, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD) since
+# those are secrets/instance-specific and deliberately not committed here.
+#
+# Database is NOT defined here - Render's free Postgres expires after 30
+# days, so this pilot setup points DATABASE_URL at a free Neon Postgres
+# project instead (see backend/README.md "Deploying a pilot instance").
+#
+# preDeployCommand runs alembic migrations + the idempotent admin-seed
+# script on every deploy, before the new instance starts serving traffic -
+# same two steps backend/README.md has you run by hand locally
+# (`alembic upgrade head`, `python -m scripts.seed_admin`), just automated
+# for a headless deploy target where there's no shell to run them from by
+# default.
+services:
+  - type: web
+    name: employee-agent-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    preDeployCommand: "alembic upgrade head && python -m scripts.seed_admin"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_DOMAIN
+        value: ""
+      - key: CORS_ORIGINS
+        value: '["http://localhost:5173"]'
+      - key: AGGREGATION_INTERVAL_MINUTES
+        value: "15"
+      - key: ALERT_EVALUATION_INTERVAL_MINUTES
+        value: "5"
+      - key: ENVIRONMENT
+        value: production
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_ADMIN_FULL_NAME
+        value: "Admin User"
