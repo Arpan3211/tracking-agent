@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ApiError } from '../api/client'
 import { ShieldIcon } from '../lib/icons'
+import { Button } from '../components/theme'
 
 export function LoginPage() {
   const { user, login } = useAuth()
@@ -67,9 +68,9 @@ export function LoginPage() {
 
         {error && <p className="error-text">{error}</p>}
 
-        <button className="btn btn-primary" type="submit" disabled={isSubmitting} style={{ width: '100%' }}>
+        <Button variant="primary" type="submit" disabled={isSubmitting} style={{ width: '100%' }}>
           {isSubmitting ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   )

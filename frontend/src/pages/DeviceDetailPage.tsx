@@ -14,6 +14,7 @@ import {
   type EventCategoryKey,
 } from '../lib/eventMeta'
 import { ClockIcon, LayersIcon, CameraIcon, MonitorIcon, PauseIcon } from '../lib/icons'
+import { Button, Card, DataTable, PageHeader, StatTile, type DataTableColumn } from '../components/theme'
 
 const APP_USAGE_DAYS = 7
 const EVENTS_PAGE_SIZE = 25
@@ -154,80 +155,108 @@ export function DeviceDetailPage() {
 
   const screenshotCount = categoryCountsQuery.data?.byCategory.screenshots ?? 0
 
+  const sessionColumns: DataTableColumn<SessionOut>[] = [
+    { key: 'login_at', header: 'Login', render: (s) => formatDateTime(s.login_at) },
+    { key: 'logout_at', header: 'Logout', render: (s) => (s.logout_at ? formatDateTime(s.logout_at) : <span className="muted">open</span>) },
+    { key: 'duration_seconds', header: 'Duration', render: (s) => (s.duration_seconds !== null ? formatDuration(s.duration_seconds) : '—') },
+  ]
+
+  const idlePeriodColumns: DataTableColumn<IdlePeriodOut>[] = [
+    { key: 'start', header: 'Started', render: (p) => formatDateTime(p.start) },
+    { key: 'end', header: 'Ended', render: (p) => (p.end ? formatDateTime(p.end) : <span className="muted">ongoing</span>) },
+    { key: 'duration_seconds', header: 'Duration', render: (p) => (p.duration_seconds !== null ? formatDuration(p.duration_seconds) : '—') },
+  ]
+
+  const eventColumns: DataTableColumn<ActivityEventOut>[] = [
+    { key: 'timestamp_utc', header: 'Time', width: '1%', render: (e) => <span style={{ whiteSpace: 'nowrap' }}>{formatDateTime(e.timestamp_utc)}</span> },
+    {
+      key: 'event_type',
+      header: 'Event',
+      render: (e) => {
+        const category = categoryOf(e.event_type)
+        return (
+          <span className="event-badge">
+            <span className="event-badge-dot" style={{ background: category.color }} />
+            {formatEventTypeLabel(e.event_type)}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'summary',
+      header: 'Summary',
+      render: (e) => {
+        const isExpanded = expandedRows.has(e.id)
+        return (
+          <>
+            <span className="event-summary" title={summarizeEvent(e.event_type, e.details)}>
+              {summarizeEvent(e.event_type, e.details)}
+            </span>
+            {e.details && Object.keys(e.details).length > 0 && (
+              <button className="event-raw-toggle" onClick={() => toggleRow(e.id)}>
+                {isExpanded ? 'hide raw' : 'raw'}
+              </button>
+            )}
+            {isExpanded && <div className="event-raw">{JSON.stringify(e.details, null, 2)}</div>}
+          </>
+        )
+      },
+    },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>{device?.machine_name ?? 'Device'}</h1>
-      </div>
-      {device && (
-        <p className="page-subtitle">
-          {device.os_version ?? 'Unknown OS'} · last seen{' '}
-          {device.last_seen_at ? formatDateTime(device.last_seen_at) : 'never'}
-        </p>
-      )}
+      <PageHeader
+        title={device?.machine_name ?? 'Device'}
+        subtitle={
+          device && (
+            <>
+              {device.os_version ?? 'Unknown OS'} · last seen{' '}
+              {device.last_seen_at ? formatDateTime(device.last_seen_at) : 'never'}
+            </>
+          )
+        }
+      />
 
       <div className="stat-row">
-        <div className="stat-tile">
-          <span className="stat-tile-icon" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>
-            <ClockIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Active time ({APP_USAGE_DAYS}d)</div>
-            <div className="stat-tile-value">{formatDuration(totalActiveSeconds)}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-rust) 15%, transparent)', color: 'var(--series-rust)' }}
-          >
-            <PauseIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Idle time ({APP_USAGE_DAYS}d)</div>
-            <div className="stat-tile-value">{formatDuration(totalIdleSeconds)}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-teal) 15%, transparent)', color: 'var(--series-teal)' }}
-          >
-            <LayersIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Total events tracked</div>
-            <div className="stat-tile-value">{categoryCountsQuery.data?.total ?? '—'}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-purple) 15%, transparent)', color: 'var(--series-purple)' }}
-          >
-            <CameraIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Screenshots</div>
-            <div className="stat-tile-value">{screenshotCount}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-blue) 15%, transparent)', color: 'var(--series-blue)' }}
-          >
-            <MonitorIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Sessions logged</div>
-            <div className="stat-tile-value">{sessionsQuery.data?.length ?? '—'}</div>
-          </div>
-        </div>
+        <StatTile
+          icon={<ClockIcon size={20} />}
+          label={`Active time (${APP_USAGE_DAYS}d)`}
+          value={formatDuration(totalActiveSeconds)}
+          iconBg="var(--accent-soft)"
+          iconColor="var(--accent-ink)"
+        />
+        <StatTile
+          icon={<PauseIcon size={20} />}
+          label={`Idle time (${APP_USAGE_DAYS}d)`}
+          value={formatDuration(totalIdleSeconds)}
+          iconBg="var(--orange-light)"
+          iconColor="var(--orange)"
+        />
+        <StatTile
+          icon={<LayersIcon size={20} />}
+          label="Total events tracked"
+          value={categoryCountsQuery.data?.total ?? '—'}
+          iconBg="color-mix(in srgb, var(--series-teal) 15%, transparent)"
+          iconColor="var(--series-teal)"
+        />
+        <StatTile
+          icon={<CameraIcon size={20} />}
+          label="Screenshots"
+          value={screenshotCount}
+          iconBg="color-mix(in srgb, var(--series-purple) 15%, transparent)"
+          iconColor="var(--series-purple)"
+        />
+        <StatTile
+          icon={<MonitorIcon size={20} />}
+          label="Sessions logged"
+          value={sessionsQuery.data?.length ?? '—'}
+          iconBg="var(--green-light)"
+          iconColor="var(--green)"
+        />
       </div>
 
-      <div className="card">
-        <p className="card-title">App usage — last {APP_USAGE_DAYS} days</p>
+      <Card title={`App usage — last ${APP_USAGE_DAYS} days`}>
         {topApps.length === 0 ? (
           <p className="muted">No app usage recorded in this range.</p>
         ) : (
@@ -255,83 +284,49 @@ export function DeviceDetailPage() {
             </BarChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">Session history</p>
-        {sessionsQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : (sessionsQuery.data ?? []).length === 0 ? (
-          <p className="muted">No sessions recorded yet.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Login</th>
-                  <th>Logout</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(sessionsQuery.data ?? []).map((s) => (
-                  <tr key={s.id}>
-                    <td>{formatDateTime(s.login_at)}</td>
-                    <td>{s.logout_at ? formatDateTime(s.logout_at) : <span className="muted">open</span>}</td>
-                    <td>{s.duration_seconds !== null ? formatDuration(s.duration_seconds) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <Card title="Session history" className="section-gap">
+        <DataTable
+          columns={sessionColumns}
+          rows={sessionsQuery.data ?? []}
+          rowKey={(s) => s.id}
+          loading={sessionsQuery.isLoading}
+          emptyMessage="No sessions recorded yet."
+        />
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">
-          Idle / pause periods
-          <span className="card-title-sub">
-            {idlePeriodsQuery.data
-              ? `${idlePeriodsQuery.data.length} in the last ${APP_USAGE_DAYS}d, ${formatDuration(totalIdleSeconds)} total`
-              : ''}
-          </span>
-        </p>
-        {idlePeriodsQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : (idlePeriodsQuery.data ?? []).length === 0 ? (
-          <p className="muted">No idle periods recorded in this range.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>Ended</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(idlePeriodsQuery.data ?? []).map((p) => (
-                  <tr key={p.start}>
-                    <td>{formatDateTime(p.start)}</td>
-                    <td>{p.end ? formatDateTime(p.end) : <span className="muted">ongoing</span>}</td>
-                    <td>{p.duration_seconds !== null ? formatDuration(p.duration_seconds) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <Card
+        className="section-gap"
+        title={
+          <>
+            Idle / pause periods
+            <span className="card-title-sub">
+              {idlePeriodsQuery.data
+                ? `${idlePeriodsQuery.data.length} in the last ${APP_USAGE_DAYS}d, ${formatDuration(totalIdleSeconds)} total`
+                : ''}
+            </span>
+          </>
+        }
+      >
+        <DataTable
+          columns={idlePeriodColumns}
+          rows={idlePeriodsQuery.data ?? []}
+          rowKey={(p) => p.start}
+          loading={idlePeriodsQuery.isLoading}
+          emptyMessage="No idle periods recorded in this range."
+        />
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">
-          Event timeline
-          <span className="card-title-sub">
-            {eventsQuery.data ? `${eventsQuery.data.total} matching` : ''}
-          </span>
-        </p>
-
+      <Card
+        className="section-gap"
+        title={
+          <>
+            Event timeline
+            <span className="card-title-sub">{eventsQuery.data ? `${eventsQuery.data.total} matching` : ''}</span>
+          </>
+        }
+      >
         <div className="category-pills">
           <button
             className={`category-pill${activeCategory === 'all' ? ' active' : ''}`}
@@ -388,66 +383,28 @@ export function DeviceDetailPage() {
           </div>
         </div>
 
-        {eventsQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : (eventsQuery.data?.items ?? []).length === 0 ? (
-          <p className="muted">No events match these filters.</p>
-        ) : (
-          <>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Event</th>
-                    <th>Summary</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(eventsQuery.data?.items ?? []).map((e) => {
-                    const category = categoryOf(e.event_type)
-                    const isExpanded = expandedRows.has(e.id)
-                    return (
-                      <tr key={e.id}>
-                        <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(e.timestamp_utc)}</td>
-                        <td>
-                          <span className="event-badge">
-                            <span className="event-badge-dot" style={{ background: category.color }} />
-                            {formatEventTypeLabel(e.event_type)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="event-summary" title={summarizeEvent(e.event_type, e.details)}>
-                            {summarizeEvent(e.event_type, e.details)}
-                          </span>
-                          {e.details && Object.keys(e.details).length > 0 && (
-                            <button className="event-raw-toggle" onClick={() => toggleRow(e.id)}>
-                              {isExpanded ? 'hide raw' : 'raw'}
-                            </button>
-                          )}
-                          {isExpanded && <div className="event-raw">{JSON.stringify(e.details, null, 2)}</div>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+        <DataTable
+          columns={eventColumns}
+          rows={eventsQuery.data?.items ?? []}
+          rowKey={(e) => e.id}
+          loading={eventsQuery.isLoading}
+          emptyMessage="No events match these filters."
+        />
 
-            <div className="pagination-bar">
-              <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                ← Prev
-              </button>
-              <span>
-                Page {page} of {totalEventPages} ({eventsQuery.data?.total ?? 0} events)
-              </span>
-              <button className="btn" disabled={page >= totalEventPages} onClick={() => setPage((p) => p + 1)}>
-                Next →
-              </button>
-            </div>
-          </>
+        {(eventsQuery.data?.items ?? []).length > 0 && (
+          <div className="pagination-bar">
+            <Button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              ← Prev
+            </Button>
+            <span>
+              Page {page} of {totalEventPages} ({eventsQuery.data?.total ?? 0} events)
+            </span>
+            <Button disabled={page >= totalEventPages} onClick={() => setPage((p) => p + 1)}>
+              Next →
+            </Button>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

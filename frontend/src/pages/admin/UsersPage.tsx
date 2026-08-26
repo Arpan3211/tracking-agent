@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../api/client'
 import type { UserOut, UserRole } from '../../api/types'
+import { Button, Card, DataTable, PageHeader, type DataTableColumn } from '../../components/theme'
 
 const ROLES: UserRole[] = ['employee', 'supervisor', 'hr', 'admin']
 
@@ -51,14 +52,62 @@ export function UsersPage() {
     createMutation.mutate()
   }
 
+  const columns: DataTableColumn<UserOut>[] = [
+    { key: 'full_name', header: 'Name' },
+    { key: 'email', header: 'Email' },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (u) => (
+        <select
+          value={u.role}
+          onChange={(e) => updateMutation.mutate({ id: u.id, changes: { role: e.target.value as UserRole } })}
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: 'supervisor_id',
+      header: 'Supervisor',
+      render: (u) => (
+        <select
+          value={u.supervisor_id ?? ''}
+          onChange={(e) => updateMutation.mutate({ id: u.id, changes: { supervisor_id: e.target.value || null } })}
+        >
+          <option value="">None</option>
+          {supervisors
+            .filter((s) => s.id !== u.id)
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.full_name}
+              </option>
+            ))}
+        </select>
+      ),
+    },
+    {
+      key: 'is_active',
+      header: 'Active',
+      render: (u) => (
+        <input
+          type="checkbox"
+          checked={u.is_active}
+          onChange={(e) => updateMutation.mutate({ id: u.id, changes: { is_active: e.target.checked } })}
+        />
+      ),
+    },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>Users</h1>
-      </div>
+      <PageHeader title="Users" />
 
-      <div className="card">
-        <p className="card-title">Add user</p>
+      <Card title="Add user">
         <form onSubmit={handleCreate}>
           <div className="form-row">
             <div className="form-field">
@@ -94,76 +143,17 @@ export function UsersPage() {
                 ))}
               </select>
             </div>
-            <button className="btn btn-primary" type="submit" disabled={createMutation.isPending}>
+            <Button variant="primary" type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Creating…' : 'Create user'}
-            </button>
+            </Button>
           </div>
           {formError && <p className="error-text">{formError}</p>}
         </form>
-      </div>
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">All users</p>
-        {usersQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Supervisor</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.full_name}</td>
-                  <td>{u.email}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      onChange={(e) => updateMutation.mutate({ id: u.id, changes: { role: e.target.value as UserRole } })}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      value={u.supervisor_id ?? ''}
-                      onChange={(e) =>
-                        updateMutation.mutate({ id: u.id, changes: { supervisor_id: e.target.value || null } })
-                      }
-                    >
-                      <option value="">None</option>
-                      {supervisors
-                        .filter((s) => s.id !== u.id)
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.full_name}
-                          </option>
-                        ))}
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={u.is_active}
-                      onChange={(e) => updateMutation.mutate({ id: u.id, changes: { is_active: e.target.checked } })}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Card title="All users" className="section-gap">
+        <DataTable columns={columns} rows={users} rowKey={(u) => u.id} loading={usersQuery.isLoading} />
+      </Card>
     </div>
   )
 }

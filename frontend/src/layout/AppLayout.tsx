@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { BellIcon, FileTextIcon, GridIcon, ListIcon, LogOutIcon, ShieldIcon, UsersIcon } from '../lib/icons'
+import { Button, Chip } from '../components/theme'
 
 export function AppLayout() {
   const { user, logout } = useAuth()
@@ -45,12 +46,12 @@ export function AppLayout() {
 
         <div className="sidebar-footer">
           <div>{user.full_name}</div>
-          <span className="chip chip-role">{user.role}</span>
-          <button className="btn" style={{ marginTop: 12, width: '100%' }} onClick={() => void logout()}>
+          <Chip tone="role">{user.role}</Chip>
+          <Button style={{ marginTop: 12, width: '100%' }} onClick={() => void logout()}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <LogOutIcon size={14} /> Log out
             </span>
-          </button>
+          </Button>
         </div>
       </nav>
 

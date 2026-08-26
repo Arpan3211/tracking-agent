@@ -172,3 +172,26 @@ export const PauseIcon = base(
     <rect x="14" y="4" width="4" height="16" rx="1" />
   </>,
 )
+
+export const InfoIcon = base(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 16v-5M12 8h.01" />
+  </>,
+)
+
+export const AlertTriangleIcon = base(
+  <>
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+    <path d="M12 9v4M12 17h.01" />
+  </>,
+)
+
+export const CheckCircleIcon = base(
+  <>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <path d="m22 4-10 10.01-3-3" />
+  </>,
+)
+
+export const ChevronDownIcon = base(<path d="m6 9 6 6 6-6" />)

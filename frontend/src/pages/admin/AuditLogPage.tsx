@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import type { AuditLogOut, UserOut } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
+import { Card, DataTable, PageHeader, type DataTableColumn } from '../../components/theme'
 
 export function AuditLogPage() {
   const auditQuery = useQuery({ queryKey: ['admin', 'audit-log'], queryFn: () => api.get<AuditLogOut[]>('/admin/audit-log') })
@@ -10,40 +11,26 @@ export function AuditLogPage() {
   const userById = new Map((usersQuery.data ?? []).map((u) => [u.id, u]))
   const entries = auditQuery.data ?? []
 
+  const columns: DataTableColumn<AuditLogOut>[] = [
+    { key: 'timestamp', header: 'Time', render: (entry) => formatDateTime(entry.timestamp) },
+    { key: 'actor_user_id', header: 'Actor', render: (entry) => userById.get(entry.actor_user_id)?.email ?? entry.actor_user_id },
+    { key: 'action', header: 'Action' },
+    { key: 'target', header: 'Target', render: (entry) => <span className="muted">{entry.target ?? '—'}</span> },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>Audit Log</h1>
-      </div>
+      <PageHeader title="Audit Log" />
 
-      <div className="card">
-        {auditQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : entries.length === 0 ? (
-          <p className="muted">No audit events recorded yet.</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Actor</th>
-                <th>Action</th>
-                <th>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{formatDateTime(entry.timestamp)}</td>
-                  <td>{userById.get(entry.actor_user_id)?.email ?? entry.actor_user_id}</td>
-                  <td>{entry.action}</td>
-                  <td className="muted">{entry.target ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Card>
+        <DataTable
+          columns={columns}
+          rows={entries}
+          rowKey={(entry) => entry.id}
+          loading={auditQuery.isLoading}
+          emptyMessage="No audit events recorded yet."
+        />
+      </Card>
     </div>
   )
 }

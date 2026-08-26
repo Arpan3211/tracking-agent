@@ -15,6 +15,7 @@ import { api } from '../api/client'
 import type { ActivitySummaryOut, DeviceOut, AlertOut } from '../api/types'
 import { daysAgoIsoDate, formatDateTime, todayIsoDate } from '../lib/format'
 import { BellIcon, MonitorIcon, ClockIcon } from '../lib/icons'
+import { Card, Chip, DataTable, PageHeader, StatTile, type DataTableColumn } from '../components/theme'
 
 const TREND_DAYS = 14
 
@@ -81,53 +82,54 @@ export function DashboardPage() {
       }))
   }, [summaries])
 
+  const deviceColumns: DataTableColumn<DeviceOut>[] = [
+    { key: 'machine_name', header: 'Machine', render: (d) => <Link to={`/devices/${d.id}`}>{d.machine_name}</Link> },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (d) => {
+        const online = d.last_seen_at ? Date.now() - new Date(d.last_seen_at).getTime() < 24 * 60 * 60 * 1000 : false
+        return (
+          <Chip tone={online ? 'acknowledged' : 'unread'} dot>
+            {online ? 'Online' : 'Offline'}
+          </Chip>
+        )
+      },
+    },
+    { key: 'os_version', header: 'OS', render: (d) => d.os_version ?? '—' },
+    { key: 'last_seen_at', header: 'Last seen', render: (d) => (d.last_seen_at ? formatDateTime(d.last_seen_at) : 'never') },
+    { key: 'link', header: '', render: (d) => <Link to={`/devices/${d.id}`}>View →</Link> },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>Dashboard</h1>
-      </div>
+      <PageHeader title="Dashboard" />
 
       <div className="stat-row">
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-blue) 15%, transparent)', color: 'var(--series-blue)' }}
-          >
-            <MonitorIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Active devices (24h)</div>
-            <div className="stat-tile-value">{devicesQuery.isLoading ? '—' : activeDevicesCount}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--series-amber) 18%, transparent)', color: '#a16207' }}
-          >
-            <ClockIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Avg idle % ({TREND_DAYS}d)</div>
-            <div className="stat-tile-value">{avgIdlePct === null ? '—' : `${avgIdlePct}%`}</div>
-          </div>
-        </div>
-        <div className="stat-tile">
-          <span
-            className="stat-tile-icon"
-            style={{ background: 'color-mix(in srgb, var(--status-critical) 12%, transparent)', color: 'var(--status-critical)' }}
-          >
-            <BellIcon size={20} />
-          </span>
-          <div className="stat-tile-body">
-            <div className="stat-tile-label">Alerts today</div>
-            <div className="stat-tile-value">{alertsQuery.isLoading ? '—' : alertsToday}</div>
-          </div>
-        </div>
+        <StatTile
+          icon={<MonitorIcon size={20} />}
+          label="Active devices (24h)"
+          value={devicesQuery.isLoading ? '—' : activeDevicesCount}
+          iconBg="var(--accent-soft)"
+          iconColor="var(--accent-ink)"
+        />
+        <StatTile
+          icon={<ClockIcon size={20} />}
+          label={`Avg idle % (${TREND_DAYS}d)`}
+          value={avgIdlePct === null ? '—' : `${avgIdlePct}%`}
+          iconBg="var(--orange-light)"
+          iconColor="var(--orange)"
+        />
+        <StatTile
+          icon={<BellIcon size={20} />}
+          label="Alerts today"
+          value={alertsQuery.isLoading ? '—' : alertsToday}
+          iconBg="var(--red-light)"
+          iconColor="var(--red)"
+        />
       </div>
 
-      <div className="card">
-        <p className="card-title">Active vs idle time — last {TREND_DAYS} days</p>
+      <Card title={`Active vs idle time — last ${TREND_DAYS} days`}>
         {trendData.length === 0 ? (
           <p className="muted">No activity data yet for this range.</p>
         ) : (
@@ -151,52 +153,17 @@ export function DashboardPage() {
             </BarChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">Devices</p>
-        {devicesQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : devices.length === 0 ? (
-          <p className="muted">No devices enrolled yet.</p>
-        ) : (
-          <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Machine</th>
-                <th>Status</th>
-                <th>OS</th>
-                <th>Last seen</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {devices.map((d) => {
-                const online = d.last_seen_at ? Date.now() - new Date(d.last_seen_at).getTime() < 24 * 60 * 60 * 1000 : false
-                return (
-                <tr key={d.id}>
-                  <td>
-                    <Link to={`/devices/${d.id}`}>{d.machine_name}</Link>
-                  </td>
-                  <td>
-                    <span className={`chip ${online ? 'chip-acknowledged' : 'chip-unread'}`}>
-                      <span className="chip-dot" /> {online ? 'Online' : 'Offline'}
-                    </span>
-                  </td>
-                  <td>{d.os_version ?? '—'}</td>
-                  <td>{d.last_seen_at ? formatDateTime(d.last_seen_at) : 'never'}</td>
-                  <td>
-                    <Link to={`/devices/${d.id}`}>View →</Link>
-                  </td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          </div>
-        )}
-      </div>
+      <Card title="Devices" className="section-gap">
+        <DataTable
+          columns={deviceColumns}
+          rows={devices}
+          rowKey={(d) => d.id}
+          loading={devicesQuery.isLoading}
+          emptyMessage="No devices enrolled yet."
+        />
+      </Card>
     </div>
   )
 }

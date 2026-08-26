@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api, exportUrl } from '../api/client'
 import type { DeviceOut } from '../api/types'
 import { daysAgoIsoDate, todayIsoDate } from '../lib/format'
+import { Button, Card, PageHeader } from '../components/theme'
 
 export function ReportsPage() {
   const devicesQuery = useQuery({ queryKey: ['devices'], queryFn: () => api.get<DeviceOut[]>('/devices') })
@@ -18,13 +19,9 @@ export function ReportsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Reports</h1>
-      </div>
+      <PageHeader title="Reports" />
 
-      <div className="card">
-        <p className="card-title">Export activity data</p>
-
+      <Card title="Export activity data">
         <div className="form-row">
           <div className="form-field">
             <label>Device</label>
@@ -66,9 +63,9 @@ export function ReportsPage() {
               Export
             </a>
           ) : (
-            <button className="btn btn-primary" disabled>
+            <Button variant="primary" disabled>
               Export
-            </button>
+            </Button>
           )}
         </div>
 
@@ -78,7 +75,7 @@ export function ReportsPage() {
             recorded in the audit log.
           </p>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

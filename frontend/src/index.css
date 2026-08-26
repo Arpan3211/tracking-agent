@@ -1,56 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
   color-scheme: light;
 
-  /* Neutrals - warm off-white/white surfaces, soft near-black ink (never
-     pure #000 - a true black next to a bright yellow accent reads harsh;
-     this warm near-black is what makes the palette feel considered rather
-     than just "yellow on a Bootstrap default"). */
-  --surface-page: #faf9f5;
+  /* ---- "Compact Navy-Blue Enterprise Admin" theme tokens ----
+     Exact palette from theme_spec.md / theme_prompt.md. $subtle
+     (--text-subtle) is reserved for placeholders/disabled text only per
+     the readability-upgrade note - anything a user is meant to read uses
+     --text-secondary/--text-muted (both = $muted, #4a6280) or darker. */
+  --text-primary: #0f2744; /* $navy / $text */
+  --text-secondary: #4a6280; /* $muted */
+  --text-muted: #4a6280; /* $muted */
+  --text-subtle: #8ba4c0; /* $subtle - placeholders/disabled ONLY */
+
+  --surface-page: #f0f4fa; /* $page-bg */
   --surface-card: #ffffff;
-  --surface-sunken: #f3f1ea;
-  --text-primary: #14140f;
-  --text-secondary: #52514e;
-  --text-muted: #86847c;
-  --border: #e7e4da;
-  --border-strong: #d3cfc2;
+  --surface-sunken: #f8faff; /* table header stripe */
+  --surface-stripe: #fbfdff; /* zebra row tint */
+  --surface-hover: #f5f9ff; /* row hover/selected tint */
 
-  /* Brand accent - yellow. --accent is deliberately only ever used as a
-     FILLED surface (buttons, active pills, badges) paired with dark text -
-     bright yellow as body text or a thin border/outline on white fails
-     contrast (~1.4:1). --accent-ink is the same hue darkened to 5.7:1+ on
-     white, for links and any accent color that has to appear as text or a
-     visible outline. Verified with the dataviz skill's contrast() checker,
-     not eyeballed. */
-  --accent: #ffd400;
-  --accent-strong: #e0c000;
-  --accent-ink: #7a5d00;
-  --accent-soft: #fff6d6;
+  --border: #e2eaf4;
+  --border-strong: #c9d8eb;
 
-  /* Sidebar - "light black": a warm charcoal, not navy, not pure black. */
+  --accent: #1f6feb; /* $blue - primary action color, links, focus rings */
+  --accent-strong: #185ec7; /* hover shade, ~15% darker */
+  --accent-ink: #1f6feb; /* $blue clears 4.5:1 on white, safe as text too */
+  --accent-soft: #ebf5ff; /* $blue-light */
+
+  --red: #dc2626;
+  --red-light: #fdecea;
+  --green: #16a34a;
+  --green-light: #eaf7ee;
+  --orange: #d06c0a;
+  --orange-light: #fdf1e4;
+
+  /* Status - reserved meaning, mapped onto the theme's semantic colors. */
+  --status-good: #16a34a;
+  --status-warning: #d06c0a;
+  --status-serious: #d06c0a;
+  --status-serious-ink: #a85708;
+  --status-critical: #dc2626;
+
+  /* Sidebar - navy, with the theme's one blue accent for the active item. */
   --sidebar-width: 240px;
-  --sidebar-bg: #17170f;
-  --sidebar-bg-elevated: #201f17;
-  --sidebar-text: #b8b6a8;
-  --sidebar-text-active: #14140f;
+  --sidebar-bg: #0f2744;
+  --sidebar-bg-elevated: #15335c;
+  --sidebar-text: #a9bdd6;
+  --sidebar-text-active: #ffffff;
 
-  /* Status - reserved meaning, never reused for a series color (a status
-     hue "impersonating" a data series is a real anti-pattern). Distinct
-     from --accent so a warning/critical badge is never mistaken for a
-     plain brand-yellow UI element. status-serious-ink is a darkened
-     text-safe variant, matching status-good/critical which are already
-     dark enough on white to double as their own text color. */
-  --status-good: #106b2e;
-  --status-warning: #d97a0a;
-  --status-serious: #c25b0a;
-  --status-serious-ink: #9a4a08;
-  --status-critical: #c22f3b;
-
-  /* Categorical (event identity, see lib/eventMeta.ts) - a 10-hue set
-     validated with the dataviz skill's six-check palette validator
-     (lightness band, chroma floor, CVD adjacency, normal-vision
-     separation, contrast) in this exact display order, on this exact
-     --surface-page. Re-run the validator before reordering or recoloring
-     any of these. */
+  /* Categorical (event identity, see lib/eventMeta.ts) - unrelated to the
+     admin-chrome accent color, validated separately with the dataviz
+     skill's six-check palette validator. Left unchanged by this retheme;
+     re-run the validator before reordering or recoloring any of these. */
   --series-blue: #2a78d6;
   --series-orange: #eb6834;
   --series-teal: #1baf7a;
@@ -62,12 +63,14 @@
   --series-emerald: #0f8a5f;
   --series-rust: #9b5a1e;
 
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow-sm: 0 1px 2px rgba(20, 20, 15, 0.06);
-  --shadow-md: 0 8px 24px -8px rgba(20, 20, 15, 0.12), 0 1px 2px rgba(20, 20, 15, 0.05);
+  --radius: 11px;
+  --radius-sm: 7px;
+  --shadow-sm: 0 4px 14px rgba(15, 39, 68, 0.05);
+  --shadow-md: 0 24px 60px rgba(15, 39, 68, 0.22);
 
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 * {
@@ -84,18 +87,15 @@ body {
   min-height: 100vh;
 }
 
-/* One consistent keyboard-focus treatment across every interactive
-   element, instead of leaving it to inconsistent browser defaults - a
-   3px ring at 6:1+ contrast (--accent-ink) is visible on every surface
-   this app has (white cards, the dark sidebar, yellow-filled buttons). */
+/* One consistent keyboard-focus treatment across every interactive element:
+   blue border/ring at >=3:1 contrast on every surface this app has (white
+   cards, the navy sidebar, filled blue buttons). */
 :focus-visible {
-  outline: 3px solid var(--accent-ink);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 a {
-  /* --accent-ink, not --accent - bright yellow text on a light page fails
-     contrast (~1.4:1); the darkened ink variant clears WCAG AA (5.7:1). */
   color: var(--accent-ink);
 }
 
@@ -129,14 +129,6 @@ table {
   overflow-y: auto;
 }
 
-/* --accent-ink (the global :focus-visible color) is only ~2.9:1 against
-   this dark sidebar - not enough. The bright accent itself clears 12.5:1
-   here, so the sidebar gets its own focus color instead of the site-wide
-   one. */
-.sidebar :focus-visible {
-  outline-color: var(--accent);
-}
-
 .sidebar-brand {
   display: flex;
   align-items: center;
@@ -155,10 +147,9 @@ table {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Dark ink, not white - the mark is a solid yellow fill. */
-  color: var(--text-primary);
+  color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 10px -2px rgba(255, 212, 0, 0.45);
+  box-shadow: 0 4px 10px -2px rgba(31, 111, 235, 0.45);
 }
 
 .sidebar-link {
@@ -180,31 +171,29 @@ table {
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .sidebar-link.active {
   background: var(--accent);
-  /* --sidebar-text-active is the dark ink token, not white - it's sitting
-     on a bright yellow fill here, not the dark sidebar background. */
   color: var(--sidebar-text-active);
-  box-shadow: 0 4px 12px -2px rgba(255, 212, 0, 0.4);
+  box-shadow: 0 4px 12px -2px rgba(31, 111, 235, 0.45);
 }
 
 .sidebar-section-label {
-  font-size: 10.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  color: rgba(162, 164, 196, 0.6);
+  color: rgba(169, 189, 214, 0.75);
   padding: 18px 12px 6px;
 }
 
 .sidebar-footer {
   margin-top: auto;
   padding: 14px 10px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 13px;
   color: var(--sidebar-text);
 }
@@ -221,7 +210,7 @@ table {
 
 .main {
   flex: 1;
-  padding: 30px 36px 60px;
+  padding: 20px 32px 48px;
   max-width: 1320px;
   min-width: 0;
 }
@@ -230,12 +219,13 @@ table {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .page-header h1 {
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 700;
+  color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -244,7 +234,7 @@ table {
   color: var(--text-muted);
   font-size: 13px;
   margin-top: -14px;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .page-loading {
@@ -259,18 +249,54 @@ table {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  padding: 20px 22px;
+  overflow: hidden;
 }
 
 .card + .card {
-  margin-top: 16px;
+  margin-top: 14px;
+}
+
+.card--accent {
+  border-left: 4px solid var(--accent);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: #fbfdff;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-body {
+  padding: 18px;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.card-body {
+  padding: 18px;
+}
+
+.card-body > *:last-child {
+  margin-bottom: 0;
 }
 
 .card-title {
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -278,7 +304,7 @@ table {
 }
 
 .card-title-sub {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -286,8 +312,8 @@ table {
 .stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 .stat-tile {
@@ -295,7 +321,7 @@ table {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  padding: 18px 20px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -318,7 +344,7 @@ table {
 .stat-tile-label {
   font-size: 12px;
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 4px;
   white-space: nowrap;
 }
@@ -326,7 +352,9 @@ table {
 .stat-tile-value {
   font-size: 24px;
   font-weight: 700;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* -------------------------------------------------------------------- table */
@@ -334,34 +362,48 @@ table {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
 .data-table th {
   text-align: left;
-  padding: 9px 12px;
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 11.5px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  background: var(--surface-sunken);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .data-table td {
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  line-height: 1.35;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: var(--surface-stripe);
 }
 
 .data-table tbody tr:hover {
-  background: var(--surface-sunken);
+  background: var(--surface-hover);
 }
 
 .data-table a {
   text-decoration: none;
   font-weight: 600;
+  color: var(--accent-ink);
+}
+
+.data-table-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 32px 14px;
 }
 
 .table-scroll {
@@ -374,9 +416,9 @@ table {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   background: var(--surface-sunken);
@@ -403,8 +445,9 @@ table {
 .event-raw-toggle {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 600;
   padding: 0;
   margin-left: 8px;
   text-decoration: underline;
@@ -414,9 +457,10 @@ table {
 .event-raw {
   margin-top: 4px;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-secondary);
   background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   white-space: pre-wrap;
@@ -429,30 +473,32 @@ table {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .category-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 13px;
+  padding: 7px 14px;
+  min-height: 36px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface-card);
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   transition: all 0.12s;
 }
 
 .category-pill:hover {
   border-color: var(--border-strong);
+  background: var(--surface-sunken);
 }
 
 .category-pill.active {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -465,11 +511,11 @@ table {
 
 .category-pill-count {
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .category-pill.active .category-pill-count {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* -------------------------------------------------------------------- forms */
@@ -477,7 +523,7 @@ table {
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   margin-bottom: 14px;
 }
 
@@ -487,25 +533,37 @@ table {
   color: var(--text-secondary);
 }
 
+.form-field .required {
+  color: var(--red);
+}
+
 .form-field input,
 .form-field select {
-  padding: 8px 11px;
+  min-height: 36px;
+  padding: 6px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 13.5px;
+  font-size: 14px;
   font-family: inherit;
   background: #fff;
   color: var(--text-primary);
 }
 
+.form-field input::placeholder {
+  color: var(--text-subtle);
+}
+
 .form-field input:focus,
 .form-field select:focus {
-  /* --accent-ink for both: a focus indicator needs >=3:1 contrast against
-     the surface behind it (WCAG 2.4.11) - the bright accent yellow itself
-     is ~1.4:1 on white and would be nearly invisible as a ring/border. */
-  outline: 2px solid var(--accent-ink);
-  outline-offset: 1px;
-  border-color: var(--accent-ink);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
+.form-field input.has-error,
+.form-field select.has-error {
+  border-color: var(--red);
+  background: var(--red-light);
 }
 
 .form-row {
@@ -517,31 +575,65 @@ table {
 }
 
 .btn {
-  padding: 8px 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--surface-sunken);
+  border-color: var(--border-strong);
 }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  /* Dark ink text, not white - white-on-yellow is ~1.4:1 and close to
-     unreadable; dark ink on this yellow is 13.75:1. */
-  color: var(--text-primary);
-  font-weight: 700;
+  color: #fff;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-green {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.btn-green:hover:not(:disabled) {
+  background: #128238;
+}
+
+.btn-orange {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+
+.btn-orange:hover:not(:disabled) {
+  background: #b25e09;
+}
+
+.btn-danger {
+  background: #fff;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--red-light);
 }
 
 .btn:disabled {
@@ -555,13 +647,51 @@ table {
   margin: 4px 0 0;
 }
 
+/* --------------------------------------------------------------- alert */
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.alert svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alert-info {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.alert-ok {
+  background: var(--green-light);
+  color: var(--green);
+}
+
+.alert-warn {
+  background: var(--orange-light);
+  color: var(--orange);
+}
+
+.alert-error {
+  background: var(--red-light);
+  color: var(--red);
+}
+
 /* ------------------------------------------------------------------- chips */
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
@@ -574,30 +704,27 @@ table {
 }
 
 .chip-unread {
-  background: color-mix(in srgb, var(--status-serious) 15%, transparent);
-  /* The dot below uses the lighter --status-serious (fine at 3:1+ for a
-     small graphical dot); the chip's own text needs the darker ink
-     variant to clear 4.5:1 as actual text. */
-  color: var(--status-serious-ink);
+  background: var(--red-light);
+  color: var(--red);
 }
 
 .chip-unread .chip-dot {
-  background: var(--status-serious);
+  background: var(--red);
 }
 
 .chip-acknowledged {
-  background: color-mix(in srgb, var(--status-good) 15%, transparent);
-  color: var(--status-good);
+  background: var(--green-light);
+  color: var(--green);
 }
 
 .chip-acknowledged .chip-dot {
-  background: var(--status-good);
+  background: var(--green);
 }
 
 .chip-role {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--sidebar-text);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   text-transform: capitalize;
 }
 
@@ -609,8 +736,8 @@ table {
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 212, 0, 0.16), transparent 45%),
-    radial-gradient(circle at 80% 80%, rgba(20, 20, 15, 0.05), transparent 45%),
+    radial-gradient(circle at 20% 20%, rgba(31, 111, 235, 0.12), transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(15, 39, 68, 0.06), transparent 45%),
     var(--surface-page);
 }
 
@@ -625,6 +752,7 @@ table {
 
 .login-card h1 {
   font-size: 19px;
+  color: var(--text-primary);
   margin: 0 0 22px;
   display: flex;
   align-items: center;
@@ -637,7 +765,7 @@ table {
 }
 
 .section-gap {
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 .filter-bar {

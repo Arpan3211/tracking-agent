@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, buildQuery, websocketUrl } from '../api/client'
 import type { AlertOut, DeviceOut } from '../api/types'
 import { formatDateTime } from '../lib/format'
+import { Button, Card, Chip, DataTable, PageHeader, type DataTableColumn } from '../components/theme'
 
 type ReadFilter = 'all' | 'unread' | 'read'
 
@@ -50,11 +51,39 @@ export function AlertsPage() {
   const deviceNameById = new Map(devices.map((d) => [d.id, d.machine_name]))
   const alerts = alertsQuery.data ?? []
 
+  const columns: DataTableColumn<AlertOut>[] = [
+    {
+      key: 'status',
+      header: 'Status',
+      render: (a) =>
+        a.is_read ? (
+          <Chip tone="acknowledged" dot>
+            Acknowledged
+          </Chip>
+        ) : (
+          <Chip tone="unread" dot>
+            Unread
+          </Chip>
+        ),
+    },
+    { key: 'device_id', header: 'Device', render: (a) => deviceNameById.get(a.device_id) ?? a.device_id },
+    { key: 'message', header: 'Message' },
+    { key: 'triggered_at', header: 'Triggered', render: (a) => formatDateTime(a.triggered_at) },
+    {
+      key: 'actions',
+      header: '',
+      render: (a) =>
+        !a.is_read && (
+          <Button disabled={acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(a.id)}>
+            Acknowledge
+          </Button>
+        ),
+    },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>Alerts</h1>
-      </div>
+      <PageHeader title="Alerts" />
 
       <div className="filter-bar">
         <div className="form-field" style={{ marginBottom: 0 }}>
@@ -78,56 +107,15 @@ export function AlertsPage() {
         </div>
       </div>
 
-      <div className="card">
-        {alertsQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : alerts.length === 0 ? (
-          <p className="muted">No alerts match these filters.</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Device</th>
-                <th>Message</th>
-                <th>Triggered</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    {a.is_read ? (
-                      <span className="chip chip-acknowledged">
-                        <span className="chip-dot" /> Acknowledged
-                      </span>
-                    ) : (
-                      <span className="chip chip-unread">
-                        <span className="chip-dot" /> Unread
-                      </span>
-                    )}
-                  </td>
-                  <td>{deviceNameById.get(a.device_id) ?? a.device_id}</td>
-                  <td>{a.message}</td>
-                  <td>{formatDateTime(a.triggered_at)}</td>
-                  <td>
-                    {!a.is_read && (
-                      <button
-                        className="btn"
-                        disabled={acknowledgeMutation.isPending}
-                        onClick={() => acknowledgeMutation.mutate(a.id)}
-                      >
-                        Acknowledge
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Card>
+        <DataTable
+          columns={columns}
+          rows={alerts}
+          rowKey={(a) => a.id}
+          loading={alertsQuery.isLoading}
+          emptyMessage="No alerts match these filters."
+        />
+      </Card>
     </div>
   )
 }

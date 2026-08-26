@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../api/client'
 import type { PolicyOut, PolicyRuleType } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
+import { Button, Card, DataTable, PageHeader, type DataTableColumn } from '../../components/theme'
 
 const RULE_TYPES: { value: PolicyRuleType; label: string; hint: string }[] = [
   { value: 'idle_threshold', label: 'Idle threshold', hint: 'minutes of continuous idle time' },
@@ -44,14 +45,29 @@ export function PoliciesPage() {
 
   const activeRule = RULE_TYPES.find((r) => r.value === ruleType)!
 
+  const columns: DataTableColumn<PolicyOut>[] = [
+    { key: 'name', header: 'Name' },
+    { key: 'rule_type', header: 'Rule', render: (p) => RULE_TYPES.find((r) => r.value === p.rule_type)?.label ?? p.rule_type },
+    { key: 'threshold_value', header: 'Threshold' },
+    { key: 'created_at', header: 'Created', render: (p) => formatDateTime(p.created_at) },
+    {
+      key: 'is_active',
+      header: 'Active',
+      render: (p) => (
+        <input
+          type="checkbox"
+          checked={p.is_active}
+          onChange={(e) => toggleMutation.mutate({ id: p.id, is_active: e.target.checked })}
+        />
+      ),
+    },
+  ]
+
   return (
     <div>
-      <div className="page-header">
-        <h1>Policies</h1>
-      </div>
+      <PageHeader title="Policies" />
 
-      <div className="card">
-        <p className="card-title">New policy</p>
+      <Card title="New policy">
         <form onSubmit={handleCreate}>
           <div className="form-row">
             <div className="form-field">
@@ -78,51 +94,23 @@ export function PoliciesPage() {
                 onChange={(e) => setThresholdValue(Number(e.target.value))}
               />
             </div>
-            <button className="btn btn-primary" type="submit" disabled={createMutation.isPending}>
+            <Button variant="primary" type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Creating…' : 'Create policy'}
-            </button>
+            </Button>
           </div>
           {formError && <p className="error-text">{formError}</p>}
         </form>
-      </div>
+      </Card>
 
-      <div className="card section-gap">
-        <p className="card-title">All policies</p>
-        {policiesQuery.isLoading ? (
-          <p className="muted">Loading…</p>
-        ) : policies.length === 0 ? (
-          <p className="muted">No policies yet.</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Rule</th>
-                <th>Threshold</th>
-                <th>Created</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.name}</td>
-                  <td>{RULE_TYPES.find((r) => r.value === p.rule_type)?.label ?? p.rule_type}</td>
-                  <td>{p.threshold_value}</td>
-                  <td>{formatDateTime(p.created_at)}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={p.is_active}
-                      onChange={(e) => toggleMutation.mutate({ id: p.id, is_active: e.target.checked })}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Card title="All policies" className="section-gap">
+        <DataTable
+          columns={columns}
+          rows={policies}
+          rowKey={(p) => p.id}
+          loading={policiesQuery.isLoading}
+          emptyMessage="No policies yet."
+        />
+      </Card>
     </div>
   )
 }
