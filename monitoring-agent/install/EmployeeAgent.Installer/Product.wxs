@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Employee Agent MSI - packages EmployeeAgent.exe, EmployeeAgent.Service.exe
+  and EmployeeAgent.NativeHost.exe (a merged `dotnet publish` output, see
+  build-installer.ps1) into one installer that:
+
+    - installs everything to %ProgramFiles%\EmployeeAgent
+    - installs + starts EmployeeAgentService (LocalSystem, auto-start),
+      configured with the same OS-enforced restart-on-failure policy
+      install-service.ps1 sets up manually (see AGENT.md)
+    - sets EMPLOYEEAGENT_BACKEND_URL as a machine-wide environment variable,
+      baked in at build time via -p:BackendUrl=... (build-installer.ps1) or
+      left blank and set later via registry/GPO
+
+  This is what a company's IT department pushes fleet-wide via Group Policy
+  Software Installation or as an Intune Win32 app - see the "Packaging a
+  distributable installer" section in AGENT.md for the full rollout
+  workflow. It does NOT handle the browser extension / native-messaging
+  registration (see AGENT.md - that still needs a fixed extension ID via
+  Group Policy ExtensionInstallForcelist, done separately per company).
+
+  Requires the .NET 8 Desktop Runtime to already be present on the target
+  machine (framework-dependent publish, matching the existing manual
+  install docs) - this MSI does not bundle or install the runtime.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="Employee Agent"
+           Manufacturer="Employee Agent"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="7f799861-3b50-41b9-a960-f9b82f57a34c"
+           Compressed="yes"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Employee Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Public property so `msiexec /i EmployeeAgent.msi BACKENDURL=...` can
+         override the build-time default without rebuilding the MSI. -->
+    <Property Id="BACKENDURL" Value="$(var.BackendUrl)" />
+
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="EmployeeAgent" />
+    </StandardDirectory>
+
+    <!-- Everything except EmployeeAgent.Service.exe, which gets its own
+         Component below so it can carry the ServiceInstall/ServiceControl
+         elements - a file can only belong to one component. -->
+    <ComponentGroup Id="AgentFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.StagingDir)\**" Exclude="$(var.StagingDir)\EmployeeAgent.Service.exe" />
+    </ComponentGroup>
+
+    <Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="ServiceExe" Source="$(var.StagingDir)\EmployeeAgent.Service.exe" KeyPath="yes" />
+
+      <ServiceInstall Id="EmployeeAgentServiceInstall"
+                       Name="EmployeeAgentService"
+                       DisplayName="Employee Agent Supervisor"
+                       Description="Supervises the per-session EmployeeAgent process across logon sessions; OS-enforced anti-tamper layer."
+                       Type="ownProcess"
+                       Start="auto"
+                       Account="LocalSystem"
+                       ErrorControl="normal" />
+
+      <ServiceControl Id="EmployeeAgentServiceControl"
+                       Name="EmployeeAgentService"
+                       Start="install"
+                       Stop="both"
+                       Remove="uninstall"
+                       Wait="yes" />
+
+      <!-- Mirrors install-service.ps1's `sc failure ... actions= restart/5000
+           restart/5000 restart/5000` + `reset= 0`. -->
+      <util:ServiceConfig ServiceName="EmployeeAgentService"
+                           FirstFailureActionType="restart"
+                           SecondFailureActionType="restart"
+                           ThirdFailureActionType="restart"
+                           RestartServiceDelayInSeconds="5"
+                           ResetPeriodInDays="0" />
+    </Component>
+
+    <!-- Only written when BACKENDURL is non-blank, so a company that wants
+         to configure it separately (registry push, GPO Preferences, etc.)
+         can just leave -p:BackendUrl empty at build time. -->
+    <Component Id="BackendUrlEnv" Directory="INSTALLFOLDER" Guid="*">
+      <Condition>BACKENDURL</Condition>
+      <RegistryValue Root="HKLM"
+                      Key="Software\EmployeeAgent"
+                      Name="BackendUrl"
+                      Type="string"
+                      Value="[BACKENDURL]"
+                      KeyPath="yes" />
+      <Environment Id="BackendUrlEnvVar"
+                   Name="EMPLOYEEAGENT_BACKEND_URL"
+                   Value="[BACKENDURL]"
+                   Part="all"
+                   Action="set"
+                   System="yes"
+                   Permanent="no" />
+    </Component>
+
+    <Feature Id="Main" Title="Employee Agent" Level="1">
+      <ComponentGroupRef Id="AgentFiles" />
+      <ComponentRef Id="ServiceComponent" />
+      <ComponentRef Id="BackendUrlEnv" />
+    </Feature>
+
+  </Package>
+</Wix>

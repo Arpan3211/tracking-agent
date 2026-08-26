@@ -184,6 +184,62 @@ tenant-specific and out of scope for this repo to ship as code.
   any other system handling employee monitoring data before a real
   (non-pilot) rollout.
 
+## Packaging a distributable installer (MSI) for company-wide rollout
+
+The publish/copy/script steps above are fine for testing on a handful of
+machines, but don't scale to "IT rolls this out to every employee laptop."
+For that, `monitoring-agent/install/EmployeeAgent.Installer/` builds a single
+`EmployeeAgent.msi` that installs the agent + native host, and installs
+**and starts** `EmployeeAgentService` with the same restart-on-failure
+policy `install-service.ps1` configures by hand - so there's one artifact
+to hand to IT instead of a zip and a checklist.
+
+Requires the .NET 8 SDK and the WiX v4 CLI on a **Windows** build machine
+(these projects don't build on Linux/macOS):
+
+```powershell
+dotnet tool install --global wix
+wix extension add WixToolset.Util.wixext
+
+cd monitoring-agent\install
+.\build-installer.ps1 -BackendUrl "https://backend.your-company.com" -Version "1.0.0"
+```
+
+This bakes the given backend URL in as every install's default
+`EMPLOYEEAGENT_BACKEND_URL` (as a machine-wide environment variable + an
+`HKLM\Software\EmployeeAgent` registry value) so employees/IT don't need to
+run `setx` by hand per machine. It can still be overridden per-install with
+`msiexec /i EmployeeAgent.msi BACKENDURL=...`, or left blank at build time
+(`-BackendUrl ""`) if you'd rather push that value some other way (registry
+GPO Preference, etc.).
+
+The MSI does **not** bundle the .NET 8 Desktop Runtime (target machines need
+it pre-installed, same assumption the manual `dotnet publish` steps make)
+and does not handle the browser extension / native-messaging registration -
+that still needs a fixed extension ID + `ExtensionInstallForcelist` Group
+Policy per the "Full URL website tracking" section above, since the
+extension ID isn't known at MSI build time.
+
+**Rolling it out fleet-wide**, once you have `EmployeeAgent.msi`:
+
+- **Active Directory domain**: Group Policy Management Console → new GPO →
+  Computer Configuration → Policies → Software Settings → Software
+  Installation → New → Package → point at the MSI on a share reachable by
+  every target machine → Assigned. It installs silently at next boot for
+  every computer the GPO applies to - no per-employee action needed.
+- **Intune / Azure AD-managed devices**: Apps → Windows → Add → Win32 app
+  (`.intunewin`-wrap the MSI with the Win32 Content Prep Tool), install
+  command `msiexec /i EmployeeAgent.msi /quiet BACKENDURL=...`, assign to a
+  device group as Required.
+- **Anything else (RMM tool, PSExec, no central management yet)**: run
+  `msiexec /i EmployeeAgent.msi /quiet` remotely through whatever remote-exec
+  mechanism IT already has.
+
+Bump `-Version` and re-run `build-installer.ps1` for updates - `MajorUpgrade`
+in the MSI handles upgrading an existing install in place, so redeploying
+the new MSI through the same GPO/Intune assignment is enough; there's no
+separate uninstall-then-reinstall step to script.
+
 ## Running a multi-laptop pilot
 
 For a PM demo across multiple laptops, point every agent's

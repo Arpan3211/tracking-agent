@@ -1,0 +1,26 @@
+<Project Sdk="WixToolset.Sdk/4.0.5">
+
+  <PropertyGroup>
+    <OutputName>EmployeeAgent</OutputName>
+    <OutputType>Package</OutputType>
+
+    <!-- Folder containing the merged `dotnet publish` output of all three
+         agent projects (Agent + Service + NativeHost) - see build-installer.ps1.
+         Override with -p:StagingDir=... if not using that script. -->
+    <StagingDir Condition="'$(StagingDir)'==''">$(MSBuildProjectDirectory)\..\..\..\publish\EmployeeAgent</StagingDir>
+
+    <!-- Baked-in default backend URL for this company's build. Override with
+         -p:BackendUrl=https://backend.example.com, or leave blank and set
+         EMPLOYEEAGENT_BACKEND_URL via GPO/registry after install instead. -->
+    <BackendUrl Condition="'$(BackendUrl)'==''"></BackendUrl>
+
+    <ProductVersion Condition="'$(ProductVersion)'==''">1.0.0</ProductVersion>
+
+    <DefineConstants>StagingDir=$(StagingDir);BackendUrl=$(BackendUrl);ProductVersion=$(ProductVersion)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.5" />
+  </ItemGroup>
+
+</Project>
