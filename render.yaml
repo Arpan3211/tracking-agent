@@ -7,14 +7,22 @@
 #
 # Database is NOT defined here - Render's free Postgres expires after 30
 # days, so this pilot setup points DATABASE_URL at a free Neon Postgres
-# project instead (see backend/README.md "Deploying a pilot instance").
+# project instead (see backend/README.md "Deploying a pilot instance"). Use
+# Neon's DIRECT connection string (no "-pooler" in the hostname) rewritten
+# for asyncpg, e.g.:
+#   postgresql+asyncpg://user:pass@ep-xxxx.region.aws.neon.tech/dbname?ssl=require
+# Neon's pooled endpoint uses PgBouncer transaction pooling, which conflicts
+# with asyncpg's prepared-statement caching (intermittent
+# DuplicatePreparedStatementError) - the direct endpoint sidesteps that
+# entirely at this pilot's connection volume, no code change needed.
 #
-# preDeployCommand runs alembic migrations + the idempotent admin-seed
-# script on every deploy, before the new instance starts serving traffic -
-# same two steps backend/README.md has you run by hand locally
-# (`alembic upgrade head`, `python -m scripts.seed_admin`), just automated
-# for a headless deploy target where there's no shell to run them from by
-# default.
+# dockerCommand overrides the Dockerfile's CMD (Render-blueprint-only, the
+# Dockerfile itself is untouched) to run alembic migrations + the idempotent
+# admin-seed script before uvicorn starts - the free plan doesn't support
+# preDeployCommand, so this runs on every container start instead of once
+# per deploy. Both steps are safe to repeat (alembic no-ops once at head,
+# seed_admin skips if the admin already exists), which is what makes this OK
+# even though it fires on every free-tier spin-up after idling.
 services:
   - type: web
     name: employee-agent-backend
@@ -23,7 +31,7 @@ services:
     dockerContext: ./backend
     plan: free
     healthCheckPath: /health
-    preDeployCommand: "alembic upgrade head && python -m scripts.seed_admin"
+    dockerCommand: "sh -c \"alembic upgrade head && python -m scripts.seed_admin && uvicorn app.main:app --host 0.0.0.0 --port 8000\""
     envVars:
       - key: DATABASE_URL
         sync: false

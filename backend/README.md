@@ -200,11 +200,15 @@ Postgres - Render's free Postgres auto-deletes itself after 30 days, Neon's
 free tier doesn't expire.
 
 **1. Create the database** - sign up at [neon.tech](https://neon.tech) (no
-card required), create a project, and copy the connection string it gives
-you. Rewrite it into SQLAlchemy's async form and add `?ssl=require`:
+card required), create a project, and copy the **direct** connection string
+(not the pooled one - Neon's dashboard shows both; the pooled one's hostname
+has `-pooler` in it and routes through PgBouncer, which conflicts with
+asyncpg's prepared-statement caching). Rewrite it into SQLAlchemy's async
+form, dropping any `sslmode`/`channel_binding` params (asyncpg doesn't
+understand libpq param names) in favor of `ssl=require`:
 
 ```text
-postgresql+asyncpg://<user>:<password>@<your-project>.neon.tech/<dbname>?ssl=require
+postgresql+asyncpg://<user>:<password>@<your-project>.<region>.aws.neon.tech/<dbname>?ssl=require
 ```
 
 **2. Deploy the backend** - sign up at [render.com](https://render.com),
