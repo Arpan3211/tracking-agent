@@ -11,6 +11,8 @@ frontend/dist/
 # .NET
 bin/
 obj/
+.wix/
+monitoring-agent/publish/
 
 # OS
 .DS_Store

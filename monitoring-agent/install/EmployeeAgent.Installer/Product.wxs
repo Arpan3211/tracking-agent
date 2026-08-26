@@ -48,7 +48,9 @@
          Component below so it can carry the ServiceInstall/ServiceControl
          elements - a file can only belong to one component. -->
     <ComponentGroup Id="AgentFiles" Directory="INSTALLFOLDER">
-      <Files Include="$(var.StagingDir)\**" Exclude="$(var.StagingDir)\EmployeeAgent.Service.exe" />
+      <Files Include="$(var.StagingDir)\**">
+        <Exclude Files="$(var.StagingDir)\EmployeeAgent.Service.exe" />
+      </Files>
     </ComponentGroup>
 
     <Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="*">
@@ -83,8 +85,7 @@
     <!-- Only written when BACKENDURL is non-blank, so a company that wants
          to configure it separately (registry push, GPO Preferences, etc.)
          can just leave -p:BackendUrl empty at build time. -->
-    <Component Id="BackendUrlEnv" Directory="INSTALLFOLDER" Guid="*">
-      <Condition>BACKENDURL</Condition>
+    <Component Id="BackendUrlEnv" Directory="INSTALLFOLDER" Guid="*" Condition="BACKENDURL">
       <RegistryValue Root="HKLM"
                       Key="Software\EmployeeAgent"
                       Name="BackendUrl"

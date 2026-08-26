@@ -194,13 +194,15 @@ For that, `monitoring-agent/install/EmployeeAgent.Installer/` builds a single
 policy `install-service.ps1` configures by hand - so there's one artifact
 to hand to IT instead of a zip and a checklist.
 
-Requires the .NET 8 SDK and the WiX v4 CLI on a **Windows** build machine
-(these projects don't build on Linux/macOS):
+Requires just the .NET 8 SDK on a **Windows** build machine (these projects
+don't build on Linux/macOS) - `EmployeeAgent.Installer.wixproj` is an
+SDK-style project pinned to `WixToolset.Sdk/5.0.2`, which `dotnet build`
+restores from NuGet on its own. Don't install a separate global `wix` CLI
+tool for this: WiX v6+ gates every command behind an Open Source
+Maintenance Fee EULA (<https://wixtoolset.org/osmf/>), which this project
+sidesteps entirely by staying on v5.
 
 ```powershell
-dotnet tool install --global wix
-wix extension add WixToolset.Util.wixext
-
 cd monitoring-agent\install
 .\build-installer.ps1 -BackendUrl "https://backend.your-company.com" -Version "1.0.0"
 ```

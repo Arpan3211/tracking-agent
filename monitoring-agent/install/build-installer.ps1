@@ -13,10 +13,15 @@
   2. Builds EmployeeAgent.Installer\Product.wxs against that staging folder,
      baking in -BackendUrl as the default EMPLOYEEAGENT_BACKEND_URL.
 
-  Requires: .NET 8 SDK, and the WiX v4 CLI (`dotnet tool install --global wix`
-  + `wix extension add WixToolset.Util.wixext`) on the machine running this
-  script. Must be run on Windows - the three agent projects target
-  net8.0-windows and won't build elsewhere.
+  Requires: .NET 8 SDK on the machine running this script - that's it.
+  EmployeeAgent.Installer.wixproj is an SDK-style project pinned to
+  WixToolset.Sdk/5.0.2 (see its PackageReference), which `dotnet build`
+  restores from NuGet automatically; no separately-installed global `wix`
+  CLI tool is needed, and none should be relied on, since WiX v6+ gates
+  every command behind an Open Source Maintenance Fee EULA
+  (https://wixtoolset.org/osmf/) that this project deliberately stays under
+  by pinning to v5. Must be run on Windows - the three agent projects
+  target net8.0-windows and won't build elsewhere.
 
 .PARAMETER BackendUrl
   Backend URL to bake in as the default EMPLOYEEAGENT_BACKEND_URL for every
